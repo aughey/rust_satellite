@@ -2,7 +2,6 @@ pub use anyhow::Result;
 use clap::Parser;
 use nom::{branch::alt, bytes::complete::tag, character::complete::multispace0, IResult};
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 
 #[derive(Serialize, Deserialize)]
 pub struct HostPort {
