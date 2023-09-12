@@ -1,0 +1,5 @@
+[build]
+passthrough = ["RUSTFLAGS"]
+
+[target.arm-unknown-linux-gnueabihf]
+dockerfile = "Dockerfile.cross"

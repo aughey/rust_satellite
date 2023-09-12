@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use rust_satellite::{Cli, Result};
+use streamdeck::StreamDeck;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::Mutex,
@@ -13,6 +14,14 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     let args = Cli::parse();
+
+    // Connect to device
+    let mut deck =  StreamDeck::connect(0x0fd9, 0x0063, None)?;
+
+    let serial = deck.serial().unwrap();
+    info!(
+        "Connected to device {}", serial
+    );
 
     info!("Connecting to {}:{}", args.host, args.port);
 
@@ -63,7 +72,8 @@ async fn main() -> Result<()> {
     let mut lines = BufReader::new(reader).lines();
 
     while let Some(line) = lines.next_line().await? {
-        let command = rust_satellite::Command::parse(&line).map_err(|e| anyhow::anyhow!("Error parsing line: {}, {:?}", line, e))?;
+        let command = rust_satellite::Command::parse(&line)
+            .map_err(|e| anyhow::anyhow!("Error parsing line: {}, {:?}", line, e))?;
 
         match command {
             rust_satellite::Command::Pong => {
@@ -86,8 +96,6 @@ async fn main() -> Result<()> {
                 info!("Unknown command: {} with data {}", command, line.len());
             }
         }
-
-      
     }
 
     Ok(())
