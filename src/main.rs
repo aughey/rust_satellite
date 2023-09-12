@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use rust_satellite::{command_data, Cli, Result};
+use rust_satellite::{Cli, Result};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::Mutex,
@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
 
     // turn stream into a lines stream
     let stream = tokio::io::BufStream::new(stream);
-    let (reader, mut writer) = tokio::io::split(stream);
+    let (reader, writer) = tokio::io::split(stream);
 
     let writer = Arc::new(Mutex::new(writer));
 
@@ -63,20 +63,31 @@ async fn main() -> Result<()> {
     let mut lines = BufReader::new(reader).lines();
 
     while let Some(line) = lines.next_line().await? {
-        let (command, data) =
-            command_data(&line).ok_or_else(|| anyhow::anyhow!("Bad command: {}", line))?;
+        let command = rust_satellite::Command::parse(&line).map_err(|e| anyhow::anyhow!("Error parsing line: {}, {:?}", line, e))?;
 
         match command {
-            "PONG" => {
+            rust_satellite::Command::Pong => {
                 trace!("Received PONG");
             }
-            "BEGIN" => {
-                info!("Beginning communication: {data}");
+            rust_satellite::Command::Begin(versions) => {
+                info!("Beginning communication: {:?}", versions);
             }
-            _ => {
-                info!("Unknown command: {}", command);
+            rust_satellite::Command::AddDevice(device) => {
+                info!("Adding device: {:?}", device);
+            }
+            rust_satellite::Command::KeyState(keystate) => {
+                info!("Received key state: {:?}", keystate);
+                info!("  bitmap size: {}", keystate.bitmap()?.len());
+            }
+            rust_satellite::Command::Brightness(brightness) => {
+                info!("Received brightness: {:?}", brightness);
+            }
+            rust_satellite::Command::Unknown(command) => {
+                info!("Unknown command: {} with data {}", command, line.len());
             }
         }
+
+      
     }
 
     Ok(())
