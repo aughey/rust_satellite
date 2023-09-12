@@ -4,6 +4,12 @@ FROM $CROSS_BASE_IMAGE
 ARG CROSS_DEB_ARCH
 
 RUN dpkg --add-architecture $CROSS_DEB_ARCH && apt-get update
-RUN apt-get install --assume-yes libusb-1.0-0:armhf libusb-1.0-0-dev:$CROSS_DEB_ARCH
+#RUN apt-get upgrade --assume-yes libc6:$CROSS_DEB_ARCH
+#RUN apt search libusb && exit 1
+RUN apt-get install --assume-yes libudev-dev:$CROSS_DEB_ARCH libusb-1.0-0-dev:$CROSS_DEB_ARCH
+#RUN ls -l /lib/arm-linux-gnueabihf && /x-tools/arm-unknown-linux-gnueabihf/arm-unknown-linux-gnueabihf/sysroot/usr/bin/ldd /lib/arm-linux-gnueabihf/libudev.so.1.6.9 && exit 1
 
+#RUN find / -name 'libusb*' && exit 1
 #RUN find / -name '*.so' && exit 1
+#RUN ls -l /usr/lib/arm-linux-gnueabihf/pkgconfig && exit 1
+#ENV PKG_CONFIG_PATH_arm-unknown-linux-gnueabihf=/usr/lib/arm-linux-gnueabihf/pkgconfig
