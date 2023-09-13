@@ -1,15 +1,19 @@
 ARG CROSS_BASE_IMAGE
-FROM $CROSS_BASE_IMAGE
+FROM ghcr.io/cross-rs/arm-unknown-linux-gnueabihf:main
 
 ARG CROSS_DEB_ARCH
 
 RUN dpkg --add-architecture $CROSS_DEB_ARCH && apt-get update
-#RUN apt-get upgrade --assume-yes libc6:$CROSS_DEB_ARCH
-#RUN apt search libusb && exit 1
+#RUN apt-get  upgrade --assume-yes libc6:$CROSS_DEB_ARCH
+RUN rm -f rm /etc/apt/preferences.d/all-packages
 RUN apt-get install --assume-yes libudev-dev:$CROSS_DEB_ARCH libusb-1.0-0-dev:$CROSS_DEB_ARCH
+#RUN apt-get --assume-yes upgrade libc6-armhf-cross libudev-dev:$CROSS_DEB_ARCH libudev1:$CROSS_DEB_ARCH libusb-1.0-0-dev:$CROSS_DEB_ARCH
+#ADD ./pilib.tgz /usr/lib/
+#RUN find /pilib/arm-linux-gnueabihf -name '*.so' && exit 1
+#RUN rm -f /lib/arm-linux-gnueabihf/libudev.so ; ln -s libudev.so.1.7.0 /lib/arm-linux-gnueabihf/libudev.so
 #RUN ls -l /lib/arm-linux-gnueabihf && /x-tools/arm-unknown-linux-gnueabihf/arm-unknown-linux-gnueabihf/sysroot/usr/bin/ldd /lib/arm-linux-gnueabihf/libudev.so.1.6.9 && exit 1
 
-#RUN find / -name 'libusb*' && exit 1
+#RUN find / -name '*random*' && exit 1
 #RUN find / -name '*.so' && exit 1
 #RUN ls -l /usr/lib/arm-linux-gnueabihf/pkgconfig && exit 1
 #ENV PKG_CONFIG_PATH_arm-unknown-linux-gnueabihf=/usr/lib/arm-linux-gnueabihf/pkgconfig
