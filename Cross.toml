@@ -1,5 +1,5 @@
 [build.env]
-passthrough = ["RUSTFLAGS","PKG_CONFIG_PATH"]
+passthrough = ["RUSTFLAGS","PKG_CONFIG_PATH","CFLAGS"]
 
 [target.arm-unknown-linux-gnueabihf]
 dockerfile = "Dockerfile.cross"
