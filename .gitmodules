@@ -1,3 +1,6 @@
 [submodule "rust-streamdeck"]
 	path = rust-streamdeck
 	url = https://github.com/aughey/rust-streamdeck.git
+[submodule "rust-streamdeck-updated"]
+	path = rust-streamdeck-updated
+	url = git@github.com:aughey/rust-streamdeck.git
