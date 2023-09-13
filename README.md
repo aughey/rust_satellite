@@ -11,3 +11,7 @@ Currently the satellite application is written in NodeJS, and the makers do not 
 ```
 PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig cross build --release --target arm-unknown-linux-gnueabihf
 ```
+
+```
+PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig cross build --release --target arm-unknown-linux-gnueabihf --package simple_deck
+```
