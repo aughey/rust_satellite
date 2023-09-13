@@ -1,0 +1,3 @@
+[submodule "rust-streamdeck"]
+	path = rust-streamdeck
+	url = https://github.com/aughey/rust-streamdeck.git
