@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use rust_satellite::{Cli, Result};
-use streamdeck::StreamDeck;
+
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::Mutex,

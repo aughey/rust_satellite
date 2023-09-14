@@ -98,7 +98,7 @@ impl<'a> ParseMap<'a> {
         if let Some(value) = self.map.get(key) {
             Ok(value.clone())
         } else {
-            Err(anyhow::anyhow!("Key {} not found",key))
+            Err(anyhow::anyhow!("Key {} not found", key))
         }
     }
 
@@ -172,7 +172,7 @@ impl Command<'_> {
     pub fn parse<'a>(data: &'a str) -> Result<Command<'a>> {
         // command is up to the first space
         let command = data
-            .split(" ")
+            .split(' ')
             .next()
             .ok_or_else(|| anyhow::anyhow!("No command"))?;
 
@@ -181,15 +181,20 @@ impl Command<'_> {
             .get(command.len()..)
             .ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed"))?;
 
-        let (data,ok) = if command == "ADD-DEVICE" {
+        let (data, ok) = if command == "ADD-DEVICE" {
             // annoying!, it has an extra OK value that doesn't match the key=value format
             // eat whitespace
             let data = data.trim_start();
-            let ok = data.split(" ").next().ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed ADD-DEVICE"))?;
-            let data = data.get(ok.len()..).ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed ADD-DEVICE"))?;
-            (data,ok)
+            let ok = data
+                .split(' ')
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed ADD-DEVICE"))?;
+            let data = data
+                .get(ok.len()..)
+                .ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed ADD-DEVICE"))?;
+            (data, ok)
         } else {
-            (data,"")
+            (data, "")
         };
 
         // parse key values
