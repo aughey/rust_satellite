@@ -227,5 +227,15 @@ mod tests {
                 device_id: "JohnAughey".into()
             })
         );
+
+        const DATA_ERR: &str = "ADD-DEVICE Err DEVICEID=\"JohnAughey\"";
+        let command = Command::parse(DATA_ERR).unwrap();
+        assert_eq!(
+            command,
+            Command::AddDevice(AddDevice {
+                success: false,
+                device_id: "JohnAughey".into()
+            })
+        );
     }
 }

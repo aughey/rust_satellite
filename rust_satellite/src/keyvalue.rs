@@ -60,8 +60,8 @@ fn quoted_string(data: &str) -> IResult<&str, StringOrStr> {
             // if we've accumulated strings so far, add this to the end and return,
             // otherwise we return the string reference and don't allocate.
             return match accum {
-                Some(accum) => Ok((data, StringOrStr::String(accum + value))),
-                None => Ok((data, StringOrStr::Str(value))),
+                Some(accum) => Ok((data, (accum + value).into())),
+                None => Ok((data, value.into())),
             };
         }
         // Crap, there's a backslash
@@ -81,7 +81,7 @@ fn quoted_string(data: &str) -> IResult<&str, StringOrStr> {
 
 fn unquoted_string(data: &str) -> IResult<&str, StringOrStr> {
     let (data, value) = take_while(|c: char| !c.is_whitespace())(data)?;
-    Ok((data, StringOrStr::Str(value)))
+    Ok((data, value.into()))
 }
 
 fn str_to_key_value(data: &str) -> IResult<&str, ParseMap> {
@@ -101,7 +101,7 @@ fn str_to_key_value(data: &str) -> IResult<&str, ParseMap> {
         // parse key, letters, numbers, underscores, dashes
         let (data, key) =
             take_while(|c: char| c.is_ascii_alphanumeric() || c == '_' || c == '-')(data)?;
-       
+
         let (data, _) = multispace0(data)?;
         // parse =
         let (data, _) = tag("=")(data)?;
@@ -127,11 +127,13 @@ pub enum StringOrStr<'a> {
     String(String),
     Str(&'a str),
 }
+/// Convert from a string reference
 impl<'a> From<&'a str> for StringOrStr<'a> {
     fn from(s: &'a str) -> Self {
         Self::Str(s)
     }
 }
+/// Convert from a string
 impl From<String> for StringOrStr<'_> {
     fn from(s: String) -> Self {
         Self::String(s)
@@ -151,7 +153,10 @@ impl StringOrStr<'_> {
     }
 }
 impl StringOrStr<'_> {
-    pub fn parse<T>(&self) -> Result<T,T::Err> where T : FromStr {
+    pub fn parse<T>(&self) -> Result<T, T::Err>
+    where
+        T: FromStr,
+    {
         self.as_ref().parse()
     }
 }
