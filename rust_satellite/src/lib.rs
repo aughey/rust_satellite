@@ -58,15 +58,15 @@ impl Command<'_> {
         // parse key values specially.  This handles quotes, escapes,
         // and other nonsense.  Returns a map of key value pairs (but
         // optimized to be as zero-copy as possible).
-        let key_values = keyvalue::ParseMap::try_from(data)
+        let mut key_values = keyvalue::ParseMap::try_from(data)
             .map_err(|e| anyhow::anyhow!("Error parsing key values: {}", e))?;
 
         // helper function to get a value from the key value map (reduces code-noise below)
-        let get = |key| key_values.get(key);
+        let mut get = |key| key_values.get(key);
 
         // switch on the command strings to parse the data into the
         // appropriate command.
-        Ok(match command {
+        let res = match command {
             "PONG" => Command::Pong,
             "BEGIN" => Command::Begin(Versions {
                 companion_version: get("CompanionVersion")?,
@@ -88,7 +88,17 @@ impl Command<'_> {
                 brightness: get("VALUE")?.parse()?,
             }),
             _ => Command::Unknown(command),
-        })
+        };
+
+        // we should have consumed all values
+        if !key_values.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Dev Error: Unparsed key values: {:?}",
+                key_values
+            ));
+        }
+
+        Ok(res)
     }
 }
 

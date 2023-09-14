@@ -13,10 +13,10 @@ pub struct ParseMap<'a> {
 }
 
 impl<'a> ParseMap<'a> {
-    pub fn get(&self, key: &str) -> Result<StringOrStr<'a>> {
+    pub fn get(&mut self, key: &str) -> Result<StringOrStr<'a>> {
+        // remove the key from the map, if it's not there, return an error
         self.map
-            .get(key)
-            .cloned()
+            .remove(key)
             .ok_or_else(|| anyhow::anyhow!("Key {} not found", key))
     }
 
@@ -28,6 +28,10 @@ impl<'a> ParseMap<'a> {
     #[cfg(test)]
     fn len(&self) -> usize {
         self.map.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
     }
 }
 
@@ -200,7 +204,7 @@ mod tests {
     #[test]
     fn test_keyvalue_quoted_value() {
         const DATA: &str = "key=\"value\"";
-        let key_values = ParseMap::try_from(DATA).unwrap();
+        let mut key_values = ParseMap::try_from(DATA).unwrap();
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
     }
@@ -215,7 +219,7 @@ mod tests {
     #[test]
     fn test_keyvalue_parser_leading_space() {
         const DATA: &str = "  key=value";
-        let key_values = ParseMap::try_from(DATA).unwrap();
+        let mut key_values = ParseMap::try_from(DATA).unwrap();
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
     }
@@ -223,7 +227,7 @@ mod tests {
     #[test]
     fn test_keyvalue_parser_trailing_space() {
         const DATA: &str = "key=value  ";
-        let key_values = ParseMap::try_from(DATA).unwrap();
+        let mut key_values = ParseMap::try_from(DATA).unwrap();
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
     }
@@ -231,7 +235,7 @@ mod tests {
     #[test]
     fn test_keyvalue_parser_multi_inbetween() {
         const DATA: &str = " key=value  foo=bar ";
-        let key_values = ParseMap::try_from(DATA).unwrap();
+        let mut key_values = ParseMap::try_from(DATA).unwrap();
         assert_eq!(key_values.len(), 2);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
         assert_eq!(key_values.get("foo").unwrap(), "bar".into());
@@ -240,7 +244,7 @@ mod tests {
     #[test]
     fn test_keyvalue_backslash_value() {
         const DATA: &str = "key=\"value\\\"\"";
-        let key_values = ParseMap::try_from(DATA).expect(&format!("Properly parsed {}", DATA));
+        let mut key_values = ParseMap::try_from(DATA).expect(&format!("Properly parsed {}", DATA));
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value\"".into());
     }
@@ -248,7 +252,7 @@ mod tests {
     #[test]
     fn test_keyvalue_space_after_equals() {
         const DATA: &str = "key = value";
-        let key_values = ParseMap::try_from(DATA).expect(&format!("Properly parsed {}", DATA));
+        let mut key_values = ParseMap::try_from(DATA).expect(&format!("Properly parsed {}", DATA));
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
     }
@@ -256,19 +260,19 @@ mod tests {
     #[test]
     fn test_value_parse_for_ref() {
         const DATA_STR_REF: &str = "key = value";
-        let key_values = ParseMap::try_from(DATA_STR_REF).unwrap();
+        let mut key_values = ParseMap::try_from(DATA_STR_REF).unwrap();
         let value = key_values.get("key").unwrap();
         // Should be a str ref
         assert!(matches!(value, StringOrStr::Str(_)));
 
         const DATA_STR_REF_QUOTED: &str = "key = \"value\"";
-        let key_values = ParseMap::try_from(DATA_STR_REF_QUOTED).unwrap();
+        let mut key_values = ParseMap::try_from(DATA_STR_REF_QUOTED).unwrap();
         let value = key_values.get("key").unwrap();
         // Should be a str ref
         assert!(matches!(value, StringOrStr::Str(_)));
 
         const DATA_STR_REF_QUOTED_ESCAPED: &str = "key = \"value\\\"\"";
-        let key_values = ParseMap::try_from(DATA_STR_REF_QUOTED_ESCAPED).unwrap();
+        let mut key_values = ParseMap::try_from(DATA_STR_REF_QUOTED_ESCAPED).unwrap();
         let value = key_values.get("key").unwrap();
         // Should be a String
         assert!(matches!(value, StringOrStr::String(_)));
