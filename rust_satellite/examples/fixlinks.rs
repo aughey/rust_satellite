@@ -4,8 +4,13 @@ use anyhow::Result;
 
 fn process_dir(
     dirpath: &PathBuf,
-) -> Result<(impl Iterator<Item = std::path::PathBuf>, impl Iterator<Item = std::path::PathBuf>)> {
-    let dir = std::fs::read_dir(dirpath)?.filter_map(|entry| entry.ok()).collect::<Vec<_>>();
+) -> Result<(
+    impl Iterator<Item = std::path::PathBuf>,
+    impl Iterator<Item = std::path::PathBuf>,
+)> {
+    let dir = std::fs::read_dir(dirpath)?
+        .filter_map(|entry| entry.ok())
+        .collect::<Vec<_>>();
     let files_with_links = dir.into_iter().filter_map(|entry| {
         let path = entry.path();
         let metadata = entry.metadata().ok()?;
@@ -26,7 +31,9 @@ fn process_dir(
         }
     });
 
-    let dir = std::fs::read_dir(dirpath)?.filter_map(|entry| entry.ok()).collect::<Vec<_>>();
+    let dir = std::fs::read_dir(dirpath)?
+        .filter_map(|entry| entry.ok())
+        .collect::<Vec<_>>();
     let directories = dir.into_iter().filter_map(|entry| {
         let path = entry.path();
         let metadata = entry.metadata().ok()?;
@@ -52,20 +59,21 @@ fn main() -> Result<()> {
 
     while let Some(dir) = dirs.pop() {
         let (directories, files_with_slashlib) = process_dir(&dir)?;
-        
+
         dirs.append(&mut directories.collect::<Vec<_>>());
 
         for file in files_with_slashlib {
             println!("{}", file.display());
             // The link started with /lib replace the link to start with /pilib
             let target = std::fs::read_link(&file)?;
-            let target = target.to_str().ok_or_else(||anyhow::anyhow!("Couldn't read the link of a file that should have"))?;
+            let target = target.to_str().ok_or_else(|| {
+                anyhow::anyhow!("Couldn't read the link of a file that should have")
+            })?;
             let target = target.replace("/lib", "/pilib");
             std::fs::remove_file(&file)?;
             std::os::unix::fs::symlink(&target, &file)?;
         }
     }
-
 
     Ok(())
 }

@@ -113,7 +113,7 @@ impl<'a> ParseMap<'a> {
     }
 }
 
-fn str_to_key_value<'a>(data: &str) -> IResult<&str, ParseMap> {
+fn str_to_key_value(data: &str) -> IResult<&str, ParseMap> {
     let mut key_values = HashMap::new();
 
     let mut head = data;
@@ -169,7 +169,7 @@ pub enum Command<'a> {
 }
 
 impl Command<'_> {
-    pub fn parse<'a>(data: &'a str) -> Result<Command<'a>> {
+    pub fn parse(data: &str) -> Result<Command<'_>> {
         // command is up to the first space
         let command = data
             .split(' ')
