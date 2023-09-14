@@ -1,10 +1,6 @@
-
-
 pub use anyhow::Result;
 use clap::Parser;
-use nom::{
-    IResult,
-};
+use nom::IResult;
 use serde::{Deserialize, Serialize};
 
 mod keyvalue;
@@ -23,11 +19,6 @@ pub struct Cli {
     #[arg(short, long)]
     pub port: u16,
 }
-
-
-
-
-
 
 trait Parse<'a> {
     fn parse(data: &'a keyvalue::ParseMap) -> Result<Self>

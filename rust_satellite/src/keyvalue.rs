@@ -5,7 +5,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take},
     character::complete::multispace0,
-    IResult, Finish,
+    Finish, IResult,
 };
 
 pub struct ParseMap<'a> {
@@ -52,7 +52,6 @@ fn char_or_escaped_char(data: &str) -> IResult<&str, &str> {
     }
 }
 
-
 // parse a quoted string, with escaped characters
 fn quoted_string(data: &str) -> IResult<&str, StringOrStr> {
     // initial quote
@@ -76,7 +75,6 @@ fn unquoted_string(data: &str) -> IResult<&str, StringOrStr> {
     let (data, value) = nom::bytes::complete::take_while(|c: char| !c.is_whitespace())(data)?;
     Ok((data, StringOrStr::Str(value)))
 }
-
 
 pub(crate) fn str_to_key_value(data: &str) -> IResult<&str, ParseMap> {
     let mut key_values = HashMap::new();
