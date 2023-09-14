@@ -73,9 +73,8 @@ impl Command<'_> {
         };
 
         // parse key values
-        let key_values = keyvalue::str_to_key_value(data)
-            .map_err(|e| anyhow::anyhow!("Error parsing key values: {}", e))?
-            .1;
+        let key_values = keyvalue::ParseMap::try_from(data)
+            .map_err(|e| anyhow::anyhow!("Error parsing key values: {}", e))?;
 
         let res = match command {
             "PONG" => Command::Pong,
@@ -253,57 +252,6 @@ mod tests {
                 pressed: false
             })
         );
-    }
-
-    #[test]
-    fn test_keyvalue_parser() {
-        const DATA: &str =
-            "DEVICEID=JohnAughey KEY=14 TYPE=BUTTON  BITMAP=rawdata PRESSED={true,false}";
-        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
-        let mut keys = key_values.keys().map(|s| s.to_owned()).collect::<Vec<_>>();
-        keys.sort();
-
-        assert_eq!(keys, vec!["BITMAP", "DEVICEID", "KEY", "PRESSED", "TYPE",]);
-    }
-
-    #[test]
-    fn test_keyvalue_quoted_value() {
-        const DATA: &str = "key=\"value\"";
-        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
-        assert_eq!(key_values.len(), 1);
-        assert_eq!(key_values.get("key").unwrap(), "value".into());
-    }
-
-    #[test]
-    fn test_keyvalue_parser_empty() {
-        const DATA: &str = "  ";
-        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
-        assert_eq!(key_values.len(), 0);
-    }
-
-    #[test]
-    fn test_keyvalue_parser_leading_space() {
-        const DATA: &str = "  key=value";
-        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
-        assert_eq!(key_values.len(), 1);
-        assert_eq!(key_values.get("key").unwrap(), "value".into());
-    }
-
-    #[test]
-    fn test_keyvalue_parser_trailing_space() {
-        const DATA: &str = "key=value  ";
-        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
-        assert_eq!(key_values.len(), 1);
-        assert_eq!(key_values.get("key").unwrap(), "value".into());
-    }
-
-    #[test]
-    fn test_keyvalue_parser_multi_inbetween() {
-        const DATA: &str = " key=value  foo=bar ";
-        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
-        assert_eq!(key_values.len(), 2);
-        assert_eq!(key_values.get("key").unwrap(), "value".into());
-        assert_eq!(key_values.get("foo").unwrap(), "bar".into());
     }
 
     #[test]
