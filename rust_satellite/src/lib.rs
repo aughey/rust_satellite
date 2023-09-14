@@ -80,7 +80,7 @@ impl Command<'_> {
                 key: get("KEY")?.parse()?,
                 button_type: get("TYPE")?,
                 bitmap_base64: get("BITMAP")?,
-                pressed: get("PRESSED")?.as_ref() == "true",
+                pressed: get("PRESSED")?.as_str() == "true",
             }),
             "ADD-DEVICE" => Command::AddDevice(AddDevice {
                 success: ok_or_err == "OK",

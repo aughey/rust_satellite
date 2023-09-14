@@ -163,6 +163,10 @@ impl StringOrStr<'_> {
         self.as_ref().len()
     }
 
+    pub fn as_str(&self) -> &str {
+        self.as_ref()
+    }
+
     /// Parse into a type that implements FromStr
     pub fn parse<T>(&self) -> Result<T, T::Err>
     where
