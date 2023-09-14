@@ -63,6 +63,8 @@ impl Command<'_> {
             .map_err(|e| anyhow::anyhow!("Error parsing key values: {}", e))?;
 
         // helper function to get a value from the key value map (reduces code-noise below)
+        // get is consuming from the container, so at the end, we should have consumed all
+        // values.
         let mut get = |key| key_values.get(key);
 
         // switch on the command strings to parse the data into the
