@@ -1,15 +1,7 @@
-pub use anyhow::Result;
 use clap::Parser;
-use serde::{Deserialize, Serialize};
-
-pub mod keyvalue;
 use keyvalue::StringOrStr;
-
-#[derive(Serialize, Deserialize)]
-pub struct HostPort {
-    pub host: String,
-    pub port: u16,
-}
+pub use anyhow::Result;
+pub mod keyvalue;
 
 #[derive(Parser)]
 pub struct Cli {
@@ -49,16 +41,16 @@ impl Command<'_> {
 
         // annoying!, ADD-DEVICE has an extra OK value that doesn't match the key=value format
         // so strip that off if it's there.
-        let (data, ok) = if command == "ADD-DEVICE" {
+        let (data, ok_or_err) = if command == "ADD-DEVICE" {
             // eat whitespace
             let data = data.trim_start();
             // the OK or ERR will be seperated by a space.
-            let (ok, data) = data
+            let (ok_or_err, data) = data
                 .split_once(' ')
                 .ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed ADD-DEVICE"))?;
             // eat whitespace
             let data = data.trim_start();
-            (data, ok)
+            (data, ok_or_err)
         } else {
             (data, "")
         };
@@ -88,7 +80,7 @@ impl Command<'_> {
                 pressed: get("PRESSED")?.as_ref() == "true",
             }),
             "ADD-DEVICE" => Command::AddDevice(AddDevice {
-                success: ok == "OK",
+                success: ok_or_err == "OK",
                 device_id: get("DEVICEID")?,
             }),
             "BRIGHTNESS" => Command::Brightness(Brightness {

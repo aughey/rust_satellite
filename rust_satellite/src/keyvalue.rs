@@ -2,12 +2,12 @@ use std::{collections::HashMap, str::FromStr};
 
 pub use anyhow::Result;
 use nom::{
-    branch::alt,
     bytes::complete::{tag, take, take_while},
     character::complete::multispace0,
     Finish, IResult,
 };
 
+#[derive(Debug)]
 pub struct ParseMap<'a> {
     map: HashMap<&'a str, StringOrStr<'a>>,
 }
@@ -102,13 +102,17 @@ fn str_to_key_value(data: &str) -> IResult<&str, ParseMap> {
         let (data, key) =
             take_while(|c: char| c.is_ascii_alphanumeric() || c == '_' || c == '-')(data)?;
 
-        let (data, _) = multispace0(data)?;
         // parse =
+        let (data, _) = multispace0(data)?;
         let (data, _) = tag("=")(data)?;
         let (data, _) = multispace0(data)?;
 
-        // parse value, a quoted string or a non-quoted string with no whitespace
-        let (data, value) = alt((quoted_string, unquoted_string))(data)?;
+        // parse value, a quoted string or a non-quoted string.
+        // Check if the next character is a quote, if so, parse a quoted string.
+        let (data,value) = match data.chars().next() {
+            Some('"') => quoted_string(data),
+            _ => unquoted_string(data),
+        }?;
 
         // insert into map
         key_values.insert(key, value);
@@ -139,6 +143,7 @@ impl From<String> for StringOrStr<'_> {
         Self::String(s)
     }
 }
+/// Get the underlying string reference
 impl AsRef<str> for StringOrStr<'_> {
     fn as_ref(&self) -> &str {
         match self {
@@ -147,12 +152,14 @@ impl AsRef<str> for StringOrStr<'_> {
         }
     }
 }
+/// Methods that behave like string things
 impl StringOrStr<'_> {
+    /// Length of internal string
     pub fn len(&self) -> usize {
         self.as_ref().len()
     }
-}
-impl StringOrStr<'_> {
+
+    /// Parse into a type that implements FromStr
     pub fn parse<T>(&self) -> Result<T, T::Err>
     where
         T: FromStr,
@@ -166,7 +173,7 @@ impl StringOrStr<'_> {
 /// it is are the same
 /// ```
 /// # use rust_satellite::keyvalue::StringOrStr;
-/// assert_eq!(StringOrStr::from("John"), StringOrStr::from("John".to_string()));
+/// assert_eq!(StringOrStr::Str("John"), StringOrStr::String("John".to_string()));
 /// ```
 impl PartialEq for StringOrStr<'_> {
     fn eq(&self, other: &Self) -> bool {
@@ -244,5 +251,33 @@ mod tests {
         let key_values = ParseMap::try_from(DATA).expect(&format!("Properly parsed {}", DATA));
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
+    }
+
+    #[test]
+    fn test_value_parse_for_ref() {
+        const DATA_STR_REF: &str = "key = value";
+        let key_values = ParseMap::try_from(DATA_STR_REF).unwrap();
+        let value = key_values.get("key").unwrap();
+        // Should be a str ref
+        assert!(matches!(value, StringOrStr::Str(_)));
+
+        const DATA_STR_REF_QUOTED: &str = "key = \"value\"";
+        let key_values = ParseMap::try_from(DATA_STR_REF_QUOTED).unwrap();
+        let value = key_values.get("key").unwrap();
+        // Should be a str ref
+        assert!(matches!(value, StringOrStr::Str(_)));
+
+        const DATA_STR_REF_QUOTED_ESCAPED: &str = "key = \"value\\\"\"";
+        let key_values = ParseMap::try_from(DATA_STR_REF_QUOTED_ESCAPED).unwrap();
+        let value = key_values.get("key").unwrap();
+        // Should be a String
+        assert!(matches!(value, StringOrStr::String(_)));
+    }
+
+    #[test]
+    fn test_missing_end_quote_fails() {
+        const DATA : &str = "key = \"value";
+        let key_values = ParseMap::try_from(DATA);
+        assert!(key_values.is_err(), "Should have failed to parse: {:?}", key_values);
     }
 }
