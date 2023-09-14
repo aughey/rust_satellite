@@ -26,7 +26,8 @@ impl Command<'_> {
     /// Parse the incoming line of data into a command.
     /// This will return an error if the command is not
     /// formatted as expected.
-    pub fn parse(data: &str) -> Result<Command<'_>> {
+    pub fn parse(in_data: &str) -> Result<Command<'_>> {
+        let data = in_data;
         // command is up to the first space.  Don't use split_once because
         // there may not be a space to split on.
         let command = data
@@ -92,13 +93,13 @@ impl Command<'_> {
 
         // we should have consumed all values
         if !key_values.is_empty() {
-            return Err(anyhow::anyhow!(
-                "Dev Error: Unparsed key values: {:?}",
-                key_values
-            ));
+            Err(anyhow::anyhow!(
+                "Dev Error: Unparsed key values: {:?} from command: {:?}",
+                key_values,in_data
+            ))
+        } else {
+            Ok(res)
         }
-
-        Ok(res)
     }
 }
 
