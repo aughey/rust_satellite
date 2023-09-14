@@ -6,9 +6,12 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take},
     character::complete::multispace0,
-    IResult,
+    IResult, Finish,
 };
 use serde::{Deserialize, Serialize};
+
+mod keyvalue;
+use keyvalue::StringOrStr;
 
 #[derive(Serialize, Deserialize)]
 pub struct HostPort {
@@ -24,129 +27,13 @@ pub struct Cli {
     pub port: u16,
 }
 
-// returns the next character, or the subsequent characters if the first is a backslash
-fn char_or_escaped_char(data: &str) -> IResult<&str, &str> {
-    let (data, maybe_backslash) = take(1usize)(data)?;
 
-    if data == "\\" {
-        let (data, escaped_char) = take(1usize)(data)?;
-        Ok((data, escaped_char))
-    } else {
-        Ok((data, maybe_backslash))
-    }
-}
 
-#[derive(Debug, Clone)]
-pub enum StringOrStr<'a> {
-    String(String),
-    Str(&'a str),
-}
-impl From<&str> for StringOrStr<'_> {
-    fn from(s: &str) -> Self {
-        Self::String(s.to_string())
-    }
-}
-impl<'a> AsRef<str> for StringOrStr<'a> {
-    fn as_ref(&self) -> &str {
-        match self {
-            Self::String(s) => s.as_ref(),
-            Self::Str(s) => s,
-        }
-    }
-}
-impl StringOrStr<'_> {
-    fn len(&self) -> usize {
-        self.as_ref().len()
-    }
-}
-impl PartialEq for StringOrStr<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_ref() == other.as_ref()
-    }
-}
-impl Eq for StringOrStr<'_> {}
 
-// parse a quoted string, with escaped characters
-fn quoted_string(data: &str) -> IResult<&str, StringOrStr> {
-    // initial quote
-    let (data, _) = tag("\"")(data)?;
-    // char_or_escaped_char will return the next value.  Accumulate this until
-    let mut head = data;
-    let mut accum = String::new();
-    loop {
-        let (data, value) = char_or_escaped_char(head)?;
-        head = data;
-        if value == "\"" {
-            break;
-        }
-        accum.push_str(value);
-    }
 
-    Ok((head, StringOrStr::String(accum)))
-}
-
-fn unquoted_string(data: &str) -> IResult<&str, StringOrStr> {
-    let (data, value) = nom::bytes::complete::take_while(|c: char| !c.is_whitespace())(data)?;
-    Ok((data, StringOrStr::Str(value)))
-}
-
-struct ParseMap<'a> {
-    map: HashMap<String, StringOrStr<'a>>,
-}
-impl<'a> ParseMap<'a> {
-    fn get(&self, key: &str) -> Result<StringOrStr<'a>> {
-        if let Some(value) = self.map.get(key) {
-            Ok(value.clone())
-        } else {
-            Err(anyhow::anyhow!("Key {} not found", key))
-        }
-    }
-
-    #[cfg(test)]
-    fn keys(&self) -> std::collections::hash_map::Keys<String, StringOrStr> {
-        self.map.keys()
-    }
-
-    #[cfg(test)]
-    fn len(&self) -> usize {
-        self.map.len()
-    }
-}
-
-fn str_to_key_value(data: &str) -> IResult<&str, ParseMap> {
-    let mut key_values = HashMap::new();
-
-    let mut head = data;
-    loop {
-        // Check for empty
-        if head.is_empty() {
-            break;
-        }
-        // using nom, trim whitesapce
-        let (data, _) = multispace0(head)?;
-        // Check again just in case trailing whitespace
-        if data.is_empty() {
-            head = data;
-            break;
-        }
-        // parse key, letters, numbers, underscores, dashes
-        let (data, key) = nom::bytes::complete::take_while(|c: char| {
-            c.is_ascii_alphanumeric() || c == '_' || c == '-'
-        })(data)?;
-        // parse =
-        let (data, _) = tag("=")(data)?;
-        // parse value, a quoted string or a non-quoted string with no whitespace
-        let (data, value) = alt((quoted_string, unquoted_string))(data)?;
-        // insert into map
-        key_values.insert(key.to_string(), value);
-        head = data;
-    }
-
-    Ok((head, ParseMap { map: key_values }))
-}
 
 trait Parse<'a> {
-    fn parse(data: &'a ParseMap) -> Result<Self>
+    fn parse(data: &'a keyvalue::ParseMap) -> Result<Self>
     where
         Self: Sized;
 }
@@ -198,7 +85,7 @@ impl Command<'_> {
         };
 
         // parse key values
-        let key_values = str_to_key_value(data)
+        let key_values = keyvalue::str_to_key_value(data)
             .map_err(|e| anyhow::anyhow!("Error parsing key values: {}", e))?
             .1;
 
@@ -246,7 +133,7 @@ impl KeyState<'_> {
     }
 }
 impl<'a> Parse<'a> for KeyState<'a> {
-    fn parse(data: &'a ParseMap) -> Result<Self> {
+    fn parse(data: &'a keyvalue::ParseMap) -> Result<Self> {
         Ok(Self {
             device: data.get("DEVICEID")?,
             key: data.get("KEY")?.as_ref().parse()?,
@@ -274,7 +161,7 @@ pub struct Brightness<'a> {
     pub brightness: u8,
 }
 impl<'a> Parse<'a> for Brightness<'a> {
-    fn parse(data: &'a ParseMap) -> Result<Brightness<'a>> {
+    fn parse(data: &'a keyvalue::ParseMap) -> Result<Brightness<'a>> {
         Ok(Self {
             device: data.get("DEVICEID")?,
             brightness: data.get("VALUE")?.as_ref().parse()?,
@@ -288,7 +175,7 @@ pub struct AddDevice<'a> {
     pub device_id: StringOrStr<'a>,
 }
 impl<'a> Parse<'a> for AddDevice<'a> {
-    fn parse(data: &'a ParseMap) -> Result<Self> {
+    fn parse(data: &'a keyvalue::ParseMap) -> Result<Self> {
         Ok(Self {
             success: data.get("OK")?.as_ref() == "true",
             device_id: data.get("DEVICEID")?,
@@ -302,7 +189,7 @@ pub struct Versions<'a> {
     pub api_version: StringOrStr<'a>,
 }
 impl<'a> Parse<'a> for Versions<'a> {
-    fn parse(data: &'a ParseMap) -> Result<Self> {
+    fn parse(data: &'a keyvalue::ParseMap) -> Result<Self> {
         // String looks like:
         // CompanionVersion=3.99.0+6259-develop-a48ec073 ApiVersion=1.5.1
         Ok(Self {
@@ -384,7 +271,7 @@ mod tests {
     fn test_keyvalue_parser() {
         const DATA: &str =
             "DEVICEID=JohnAughey KEY=14 TYPE=BUTTON  BITMAP=rawdata PRESSED={true,false}";
-        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
         let mut keys = key_values.keys().map(|s| s.to_owned()).collect::<Vec<_>>();
         keys.sort();
 
@@ -394,7 +281,7 @@ mod tests {
     #[test]
     fn test_keyvalue_quoted_value() {
         const DATA: &str = "key=\"value\"";
-        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
     }
@@ -402,14 +289,14 @@ mod tests {
     #[test]
     fn test_keyvalue_parser_empty() {
         const DATA: &str = "  ";
-        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
         assert_eq!(key_values.len(), 0);
     }
 
     #[test]
     fn test_keyvalue_parser_leading_space() {
         const DATA: &str = "  key=value";
-        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
     }
@@ -417,7 +304,7 @@ mod tests {
     #[test]
     fn test_keyvalue_parser_trailing_space() {
         const DATA: &str = "key=value  ";
-        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
     }
@@ -425,7 +312,7 @@ mod tests {
     #[test]
     fn test_keyvalue_parser_multi_inbetween() {
         const DATA: &str = " key=value  foo=bar ";
-        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        let (_, key_values) = keyvalue::str_to_key_value(DATA).unwrap();
         assert_eq!(key_values.len(), 2);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
         assert_eq!(key_values.get("foo").unwrap(), "bar".into());
