@@ -61,7 +61,7 @@ impl Command<'_> {
         let key_values = keyvalue::ParseMap::try_from(data)
             .map_err(|e| anyhow::anyhow!("Error parsing key values: {}", e))?;
 
-        // helper function to get a value from the key value map (reduces noise)
+        // helper function to get a value from the key value map (reduces code-noise below)
         let get = |key| key_values.get(key);
 
         // switch on the command strings to parse the data into the
