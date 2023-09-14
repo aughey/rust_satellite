@@ -1,6 +1,6 @@
+pub use anyhow::Result;
 use clap::Parser;
 use keyvalue::StringOrStr;
-pub use anyhow::Result;
 pub mod keyvalue;
 
 #[derive(Parser)]
@@ -97,7 +97,8 @@ impl Command<'_> {
         if !key_values.is_empty() {
             Err(anyhow::anyhow!(
                 "Dev Error: Unparsed key values: {:?} from command: {:?}",
-                key_values,in_data
+                key_values,
+                in_data
             ))
         } else {
             Ok(res)
@@ -145,7 +146,6 @@ pub struct AddDevice<'a> {
     pub success: bool,
     pub device_id: StringOrStr<'a>,
 }
-
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Versions<'a> {
