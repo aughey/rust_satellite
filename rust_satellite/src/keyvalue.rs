@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 pub use anyhow::Result;
 use nom::{
@@ -9,7 +9,7 @@ use nom::{
 };
 
 pub struct ParseMap<'a> {
-    map: HashMap<String, StringOrStr<'a>>,
+    map: HashMap<&'a str, StringOrStr<'a>>,
 }
 
 impl<'a> ParseMap<'a> {
@@ -21,7 +21,7 @@ impl<'a> ParseMap<'a> {
     }
 
     #[cfg(test)]
-    fn keys(&self) -> std::collections::hash_map::Keys<String, StringOrStr> {
+    fn keys(&self) -> std::collections::hash_map::Keys<&str, StringOrStr> {
         self.map.keys()
     }
 
@@ -88,44 +88,56 @@ fn str_to_key_value(data: &str) -> IResult<&str, ParseMap> {
     let mut key_values = HashMap::new();
 
     let mut head = data;
-    loop {
-        // Check for empty
-        if head.is_empty() {
-            break;
-        }
+    while !head.is_empty() {
         // using nom, trim whitesapce
         let (data, _) = multispace0(head)?;
-        // Check again just in case trailing whitespace
+
+        // Check again just in case leading whitespace
         if data.is_empty() {
             head = data;
             break;
         }
+
         // parse key, letters, numbers, underscores, dashes
         let (data, key) =
             take_while(|c: char| c.is_ascii_alphanumeric() || c == '_' || c == '-')(data)?;
+       
+        let (data, _) = multispace0(data)?;
         // parse =
         let (data, _) = tag("=")(data)?;
+        let (data, _) = multispace0(data)?;
+
         // parse value, a quoted string or a non-quoted string with no whitespace
         let (data, value) = alt((quoted_string, unquoted_string))(data)?;
+
         // insert into map
-        key_values.insert(key.to_string(), value);
+        key_values.insert(key, value);
         head = data;
     }
 
     Ok((head, ParseMap { map: key_values }))
 }
 
+/// A string that can be either a String or a &str
+/// This is used to optimize for values that could be either.
+/// Most of the time these will be references and we don't need
+/// to allocate anything, but if we need to, we can.
 #[derive(Debug, Clone)]
 pub enum StringOrStr<'a> {
     String(String),
     Str(&'a str),
 }
-impl From<&str> for StringOrStr<'_> {
-    fn from(s: &str) -> Self {
-        Self::String(s.to_string())
+impl<'a> From<&'a str> for StringOrStr<'a> {
+    fn from(s: &'a str) -> Self {
+        Self::Str(s)
     }
 }
-impl<'a> AsRef<str> for StringOrStr<'a> {
+impl From<String> for StringOrStr<'_> {
+    fn from(s: String) -> Self {
+        Self::String(s)
+    }
+}
+impl AsRef<str> for StringOrStr<'_> {
     fn as_ref(&self) -> &str {
         match self {
             Self::String(s) => s.as_ref(),
@@ -138,6 +150,19 @@ impl StringOrStr<'_> {
         self.as_ref().len()
     }
 }
+impl StringOrStr<'_> {
+    pub fn parse<T>(&self) -> Result<T,T::Err> where T : FromStr {
+        self.as_ref().parse()
+    }
+}
+
+/// PartialEq compares the references because we
+/// care if the string value inside whatever enum
+/// it is are the same
+/// ```
+/// # use rust_satellite::keyvalue::StringOrStr;
+/// assert_eq!(StringOrStr::from("John"), StringOrStr::from("John".to_string()));
+/// ```
 impl PartialEq for StringOrStr<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.as_ref() == other.as_ref()
@@ -206,5 +231,13 @@ mod tests {
         let key_values = ParseMap::try_from(DATA).expect(&format!("Properly parsed {}", DATA));
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value\"".into());
+    }
+
+    #[test]
+    fn test_keyvalue_space_after_equals() {
+        const DATA: &str = "key = value";
+        let key_values = ParseMap::try_from(DATA).expect(&format!("Properly parsed {}", DATA));
+        assert_eq!(key_values.len(), 1);
+        assert_eq!(key_values.get("key").unwrap(), "value".into());
     }
 }

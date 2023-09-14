@@ -1,9 +1,8 @@
 pub use anyhow::Result;
 use clap::Parser;
-use nom::IResult;
 use serde::{Deserialize, Serialize};
 
-mod keyvalue;
+pub mod keyvalue;
 use keyvalue::StringOrStr;
 
 #[derive(Serialize, Deserialize)]
@@ -20,19 +19,7 @@ pub struct Cli {
     pub port: u16,
 }
 
-trait Parse<'a> {
-    fn parse(data: &'a keyvalue::ParseMap) -> Result<Self>
-    where
-        Self: Sized;
-}
-
-pub fn iresult_unwrap<D, R>(value: IResult<D, R>) -> Result<R> {
-    match value {
-        Ok((_, value)) => Ok(value),
-        Err(_) => Err(anyhow::anyhow!("nom Parse error")),
-    }
-}
-
+/// Commands that can be sent to the device
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command<'a> {
     Pong,
@@ -44,8 +31,12 @@ pub enum Command<'a> {
 }
 
 impl Command<'_> {
+    /// Parse the incoming line of data into a command.
+    /// This will return an error if the command is not
+    /// formatted as expected.
     pub fn parse(data: &str) -> Result<Command<'_>> {
-        // command is up to the first space
+        // command is up to the first space.  Don't use split_once because
+        // there may not be a space to split on.
         let command = data
             .split(' ')
             .next()
@@ -56,50 +47,56 @@ impl Command<'_> {
             .get(command.len()..)
             .ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed"))?;
 
+        // annoying!, ADD-DEVICE has an extra OK value that doesn't match the key=value format
+        // so strip that off if it's there.
         let (data, ok) = if command == "ADD-DEVICE" {
-            // annoying!, it has an extra OK value that doesn't match the key=value format
             // eat whitespace
             let data = data.trim_start();
-            let ok = data
-                .split(' ')
-                .next()
+            // the OK or ERR will be seperated by a space.
+            let (ok, data) = data
+                .split_once(' ')
                 .ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed ADD-DEVICE"))?;
-            let data = data
-                .get(ok.len()..)
-                .ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed ADD-DEVICE"))?;
+            // eat whitespace
+            let data = data.trim_start();
             (data, ok)
         } else {
             (data, "")
         };
 
-        // parse key values
+        // parse key values specially.  This handles quotes, escapes,
+        // and other nonsense.  Returns a map of key value pairs (but
+        // optimized to be as zero-copy as possible).
         let key_values = keyvalue::ParseMap::try_from(data)
             .map_err(|e| anyhow::anyhow!("Error parsing key values: {}", e))?;
 
-        let res = match command {
+        // helper function to get a value from the key value map (reduces noise)
+        let get = |key| key_values.get(key);
+
+        // switch on the command strings to parse the data into the
+        // appropriate command.
+        Ok(match command {
             "PONG" => Command::Pong,
             "BEGIN" => Command::Begin(Versions {
-                companion_version: key_values.get("CompanionVersion")?,
-                api_version: key_values.get("ApiVersion")?,
+                companion_version: get("CompanionVersion")?,
+                api_version: get("ApiVersion")?,
             }),
             "KEY-STATE" => Command::KeyState(KeyState {
-                device: key_values.get("DEVICEID")?,
-                key: key_values.get("KEY")?.as_ref().parse()?,
-                button_type: key_values.get("TYPE")?,
-                bitmap_base64: key_values.get("BITMAP")?,
-                pressed: key_values.get("PRESSED")?.as_ref() == "true",
+                device: get("DEVICEID")?,
+                key: get("KEY")?.parse()?,
+                button_type: get("TYPE")?,
+                bitmap_base64: get("BITMAP")?,
+                pressed: get("PRESSED")?.as_ref() == "true",
             }),
             "ADD-DEVICE" => Command::AddDevice(AddDevice {
                 success: ok == "OK",
-                device_id: key_values.get("DEVICEID")?,
+                device_id: get("DEVICEID")?,
             }),
             "BRIGHTNESS" => Command::Brightness(Brightness {
-                device: key_values.get("DEVICEID")?,
-                brightness: key_values.get("VALUE")?.as_ref().parse()?,
+                device: get("DEVICEID")?,
+                brightness: get("VALUE")?.parse()?,
             }),
             _ => Command::Unknown(command),
-        };
-        Ok(res)
+        })
     }
 }
 
@@ -119,17 +116,7 @@ impl KeyState<'_> {
         Ok(data)
     }
 }
-impl<'a> Parse<'a> for KeyState<'a> {
-    fn parse(data: &'a keyvalue::ParseMap) -> Result<Self> {
-        Ok(Self {
-            device: data.get("DEVICEID")?,
-            key: data.get("KEY")?.as_ref().parse()?,
-            button_type: data.get("TYPE")?,
-            bitmap_base64: data.get("BITMAP")?,
-            pressed: data.get("PRESSED")?.as_ref() == "true",
-        })
-    }
-}
+
 impl std::fmt::Debug for KeyState<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("KeyState")
@@ -147,43 +134,18 @@ pub struct Brightness<'a> {
     pub device: StringOrStr<'a>,
     pub brightness: u8,
 }
-impl<'a> Parse<'a> for Brightness<'a> {
-    fn parse(data: &'a keyvalue::ParseMap) -> Result<Brightness<'a>> {
-        Ok(Self {
-            device: data.get("DEVICEID")?,
-            brightness: data.get("VALUE")?.as_ref().parse()?,
-        })
-    }
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct AddDevice<'a> {
     pub success: bool,
     pub device_id: StringOrStr<'a>,
 }
-impl<'a> Parse<'a> for AddDevice<'a> {
-    fn parse(data: &'a keyvalue::ParseMap) -> Result<Self> {
-        Ok(Self {
-            success: data.get("OK")?.as_ref() == "true",
-            device_id: data.get("DEVICEID")?,
-        })
-    }
-}
+
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Versions<'a> {
     pub companion_version: StringOrStr<'a>,
     pub api_version: StringOrStr<'a>,
-}
-impl<'a> Parse<'a> for Versions<'a> {
-    fn parse(data: &'a keyvalue::ParseMap) -> Result<Self> {
-        // String looks like:
-        // CompanionVersion=3.99.0+6259-develop-a48ec073 ApiVersion=1.5.1
-        Ok(Self {
-            companion_version: data.get("CompanionVersion")?,
-            api_version: data.get("ApiVersion")?,
-        })
-    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
