@@ -4,7 +4,7 @@ pub use anyhow::Result;
 use clap::Parser;
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take, take_while1},
+    bytes::complete::{tag, take},
     character::complete::multispace0,
     IResult,
 };
@@ -36,10 +36,35 @@ fn char_or_escaped_char(data: &str) -> IResult<&str, &str> {
     }
 }
 
-enum StringOrStr<'a> {
+#[derive(Debug, Clone)]
+pub enum StringOrStr<'a> {
     String(String),
     Str(&'a str),
 }
+impl From<&str> for StringOrStr<'_> {
+    fn from(s: &str) -> Self {
+        Self::String(s.to_string())
+    }
+}
+impl<'a> AsRef<str> for StringOrStr<'a> {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::String(s) => s.as_ref(),
+            Self::Str(s) => s,
+        }
+    }
+}
+impl StringOrStr<'_> {
+    fn len(&self) -> usize {
+        self.as_ref().len()
+    }
+}
+impl PartialEq for StringOrStr<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+impl Eq for StringOrStr<'_> {}
 
 // parse a quoted string, with escaped characters
 fn quoted_string(data: &str) -> IResult<&str, StringOrStr> {
@@ -65,7 +90,30 @@ fn unquoted_string(data: &str) -> IResult<&str, StringOrStr> {
     Ok((data, StringOrStr::Str(value)))
 }
 
-fn str_to_key_value(data: &str) -> IResult<&str, HashMap<String, StringOrStr>> {
+struct ParseMap<'a> {
+    map: HashMap<String, StringOrStr<'a>>,
+}
+impl<'a> ParseMap<'a> {
+    fn get(&self, key: &str) -> Result<StringOrStr<'a>> {
+        if let Some(value) = self.map.get(key) {
+            Ok(value.clone())
+        } else {
+            Err(anyhow::anyhow!("Key {} not found",key))
+        }
+    }
+
+    #[cfg(test)]
+    fn keys(&self) -> std::collections::hash_map::Keys<String, StringOrStr> {
+        self.map.keys()
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.map.len()
+    }
+}
+
+fn str_to_key_value<'a>(data: &str) -> IResult<&str, ParseMap> {
     let mut key_values = HashMap::new();
 
     let mut head = data;
@@ -94,11 +142,11 @@ fn str_to_key_value(data: &str) -> IResult<&str, HashMap<String, StringOrStr>> {
         head = data;
     }
 
-    Ok((head, key_values))
+    Ok((head, ParseMap { map: key_values }))
 }
 
 trait Parse<'a> {
-    fn parse(data: &'a str) -> IResult<&str, Self>
+    fn parse(data: &'a ParseMap) -> Result<Self>
     where
         Self: Sized;
 }
@@ -119,22 +167,58 @@ pub enum Command<'a> {
     Brightness(Brightness<'a>),
     Unknown(&'a str),
 }
-impl<'a> Command<'a> {
-    pub fn parse(data: &'a str) -> Result<Self> {
+
+impl Command<'_> {
+    pub fn parse<'a>(data: &'a str) -> Result<Command<'a>> {
+        // command is up to the first space
         let command = data
             .split(" ")
             .next()
             .ok_or_else(|| anyhow::anyhow!("No command"))?;
+
+        // strip command from data.  This will always succeed
         let data = data
-            .get((command.len() + 1)..)
-            .ok_or_else(|| anyhow::anyhow!("No data found")); // There might not be data, that's ok
+            .get(command.len()..)
+            .ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed"))?;
+
+        let (data,ok) = if command == "ADD-DEVICE" {
+            // annoying!, it has an extra OK value that doesn't match the key=value format
+            // eat whitespace
+            let data = data.trim_start();
+            let ok = data.split(" ").next().ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed ADD-DEVICE"))?;
+            let data = data.get(ok.len()..).ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed ADD-DEVICE"))?;
+            (data,ok)
+        } else {
+            (data,"")
+        };
+
+        // parse key values
+        let key_values = str_to_key_value(data)
+            .map_err(|e| anyhow::anyhow!("Error parsing key values: {}", e))?
+            .1;
+
         let res = match command {
-            "PONG" => Self::Pong,
-            "BEGIN" => Self::Begin(iresult_unwrap(Versions::parse(data?))?),
-            "KEY-STATE" => Self::KeyState(iresult_unwrap(KeyState::parse(data?))?),
-            "ADD-DEVICE" => Self::AddDevice(iresult_unwrap(AddDevice::parse(data?))?),
-            "BRIGHTNESS" => Self::Brightness(iresult_unwrap(Brightness::parse(data?))?),
-            _ => Self::Unknown(command),
+            "PONG" => Command::Pong,
+            "BEGIN" => Command::Begin(Versions {
+                companion_version: key_values.get("CompanionVersion")?,
+                api_version: key_values.get("ApiVersion")?,
+            }),
+            "KEY-STATE" => Command::KeyState(KeyState {
+                device: key_values.get("DEVICEID")?,
+                key: key_values.get("KEY")?.as_ref().parse()?,
+                button_type: key_values.get("TYPE")?,
+                bitmap_base64: key_values.get("BITMAP")?,
+                pressed: key_values.get("PRESSED")?.as_ref() == "true",
+            }),
+            "ADD-DEVICE" => Command::AddDevice(AddDevice {
+                success: ok == "OK",
+                device_id: key_values.get("DEVICEID")?,
+            }),
+            "BRIGHTNESS" => Command::Brightness(Brightness {
+                device: key_values.get("DEVICEID")?,
+                brightness: key_values.get("VALUE")?.as_ref().parse()?,
+            }),
+            _ => Command::Unknown(command),
         };
         Ok(res)
     }
@@ -142,52 +226,29 @@ impl<'a> Command<'a> {
 
 #[derive(PartialEq, Eq)]
 pub struct KeyState<'a> {
-    pub device: &'a str,
+    pub device: StringOrStr<'a>,
     pub key: u8,
-    pub button_type: &'a str,
-    pub bitmap_base64: &'a str,
+    pub button_type: StringOrStr<'a>,
+    pub bitmap_base64: StringOrStr<'a>,
     pub pressed: bool,
 }
 impl KeyState<'_> {
     pub fn bitmap(&self) -> Result<Vec<u8>> {
         use base64::Engine as _;
         let data = base64::engine::general_purpose::STANDARD_NO_PAD
-            .decode(self.bitmap_base64.as_bytes())?;
+            .decode(self.bitmap_base64.as_ref().as_bytes())?;
         Ok(data)
     }
 }
 impl<'a> Parse<'a> for KeyState<'a> {
-    fn parse(data: &'a str) -> IResult<&str, Self> {
-        // String looks like
-        // DEVICEID=JohnAughey KEY=14 TYPE=BUTTON  BITMAP=rawdata PRESSED={true,false}
-        let (data, _) = tag("DEVICEID=")(data)?;
-        let (data, device) = nom::bytes::complete::take_until(" ")(data)?;
-        let (data, _) = tag(" KEY=")(data)?;
-        let (data, key) = nom::bytes::complete::take_until(" ")(data)?;
-
-        let (data, _) = tag(" TYPE=")(data)?;
-        let (data, button_type) = nom::bytes::complete::take_until(" ")(data)?;
-        let (data, _) = multispace0(data)?;
-        let (data, _) = tag("BITMAP=")(data)?;
-        let (data, bitmap_base64) = nom::bytes::complete::take_until(" ")(data)?;
-        let (data, _) = tag(" PRESSED=")(data)?;
-        let (data, pressed) = nom::bytes::complete::take_till(|_| false)(data)?;
-        let pressed = pressed == "true";
-
-        let key = key.parse().map_err(|_| {
-            nom::Err::Error(nom::error::Error::new(data, nom::error::ErrorKind::Digit))
-        })?;
-
-        Ok((
-            data,
-            Self {
-                device,
-                key,
-                button_type,
-                bitmap_base64,
-                pressed,
-            },
-        ))
+    fn parse(data: &'a ParseMap) -> Result<Self> {
+        Ok(Self {
+            device: data.get("DEVICEID")?,
+            key: data.get("KEY")?.as_ref().parse()?,
+            button_type: data.get("TYPE")?,
+            bitmap_base64: data.get("BITMAP")?,
+            pressed: data.get("PRESSED")?.as_ref() == "true",
+        })
     }
 }
 impl std::fmt::Debug for KeyState<'_> {
@@ -204,74 +265,45 @@ impl std::fmt::Debug for KeyState<'_> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Brightness<'a> {
-    pub device: &'a str,
+    pub device: StringOrStr<'a>,
     pub brightness: u8,
 }
 impl<'a> Parse<'a> for Brightness<'a> {
-    fn parse(data: &'a str) -> IResult<&str, Self> {
-        // String looks like:
-        // DEVICEID=JohnAughey VALUE=100
-        let (data, _) = tag("DEVICEID=")(data)?;
-        let (data, device) = nom::bytes::complete::take_until(" ")(data)?;
-        let (data, _) = tag(" VALUE=")(data)?;
-        let (data, brightness) = nom::bytes::complete::take_till(|_| false)(data)?;
-
-        let brightness = brightness.parse().map_err(|_| {
-            nom::Err::Error(nom::error::Error::new(data, nom::error::ErrorKind::Digit))
-        })?;
-        Ok((data, Self { brightness, device }))
+    fn parse(data: &'a ParseMap) -> Result<Brightness<'a>> {
+        Ok(Self {
+            device: data.get("DEVICEID")?,
+            brightness: data.get("VALUE")?.as_ref().parse()?,
+        })
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct AddDevice<'a> {
     pub success: bool,
-    pub device_id: &'a str,
+    pub device_id: StringOrStr<'a>,
 }
 impl<'a> Parse<'a> for AddDevice<'a> {
-    fn parse(data: &'a str) -> IResult<&str, Self> {
-        // String looks like:
-        // OK DEVICEID="value"
-        // or
-        // ERROR
-        // parse either "OK " or "ERROR "
-        let (data, success) = alt((tag("OK "), tag("ERROR ")))(data)?;
-        let (data, _) = tag("DEVICEID=\"")(data)?;
-        let (data, device_id) = nom::bytes::complete::take_till(|c| c == '"')(data)?;
-        let (data, _) = tag("\"")(data)?;
-        Ok((
-            data,
-            Self {
-                success: success == "OK ",
-                device_id,
-            },
-        ))
+    fn parse(data: &'a ParseMap) -> Result<Self> {
+        Ok(Self {
+            success: data.get("OK")?.as_ref() == "true",
+            device_id: data.get("DEVICEID")?,
+        })
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Versions<'a> {
-    pub companion_version: &'a str,
-    pub api_version: &'a str,
+    pub companion_version: StringOrStr<'a>,
+    pub api_version: StringOrStr<'a>,
 }
 impl<'a> Parse<'a> for Versions<'a> {
-    fn parse(data: &'a str) -> IResult<&str, Self> {
+    fn parse(data: &'a ParseMap) -> Result<Self> {
         // String looks like:
         // CompanionVersion=3.99.0+6259-develop-a48ec073 ApiVersion=1.5.1
-
-        // use nom to parse
-        let (data, _) = tag("CompanionVersion=")(data)?;
-        let (data, companion_version) = nom::bytes::complete::take_until(" ")(data)?;
-        let (data, _) = tag(" ApiVersion=")(data)?;
-        let (data, api_version) = nom::bytes::complete::take_till(|_| false)(data)?;
-
-        IResult::Ok((
-            data,
-            Self {
-                companion_version,
-                api_version,
-            },
-        ))
+        Ok(Self {
+            companion_version: data.get("CompanionVersion")?,
+            api_version: data.get("ApiVersion")?,
+        })
     }
 }
 
@@ -307,8 +339,8 @@ mod tests {
         assert_eq!(
             command,
             Command::Begin(Versions {
-                companion_version: "3.99.0+6259-develop-a48ec073",
-                api_version: "1.5.1"
+                companion_version: "3.99.0+6259-develop-a48ec073".into(),
+                api_version: "1.5.1".into()
             })
         );
     }
@@ -321,7 +353,7 @@ mod tests {
             command,
             Command::AddDevice(AddDevice {
                 success: true,
-                device_id: "JohnAughey"
+                device_id: "JohnAughey".into()
             })
         );
     }
@@ -334,10 +366,10 @@ mod tests {
         assert_eq!(
             command,
             Command::KeyState(KeyState {
-                device: "JohnAughey",
+                device: "JohnAughey".into(),
                 key: 14,
-                button_type: "BUTTON",
-                bitmap_base64: "rawdata",
+                button_type: "BUTTON".into(),
+                bitmap_base64: "rawdata".into(),
                 pressed: false
             })
         );
@@ -352,5 +384,58 @@ mod tests {
         keys.sort();
 
         assert_eq!(keys, vec!["BITMAP", "DEVICEID", "KEY", "PRESSED", "TYPE",]);
+    }
+
+    #[test]
+    fn test_keyvalue_quoted_value() {
+        const DATA: &str = "key=\"value\"";
+        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        assert_eq!(key_values.len(), 1);
+        assert_eq!(key_values.get("key").unwrap(), "value".into());
+    }
+
+    #[test]
+    fn test_keyvalue_parser_empty() {
+        const DATA: &str = "  ";
+        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        assert_eq!(key_values.len(), 0);
+    }
+
+    #[test]
+    fn test_keyvalue_parser_leading_space() {
+        const DATA: &str = "  key=value";
+        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        assert_eq!(key_values.len(), 1);
+        assert_eq!(key_values.get("key").unwrap(), "value".into());
+    }
+
+    #[test]
+    fn test_keyvalue_parser_trailing_space() {
+        const DATA: &str = "key=value  ";
+        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        assert_eq!(key_values.len(), 1);
+        assert_eq!(key_values.get("key").unwrap(), "value".into());
+    }
+
+    #[test]
+    fn test_keyvalue_parser_multi_inbetween() {
+        const DATA: &str = " key=value  foo=bar ";
+        let (_, key_values) = str_to_key_value(DATA).unwrap();
+        assert_eq!(key_values.len(), 2);
+        assert_eq!(key_values.get("key").unwrap(), "value".into());
+        assert_eq!(key_values.get("foo").unwrap(), "bar".into());
+    }
+
+    #[test]
+    fn test_add_device_command() {
+        const DATA: &str = "ADD-DEVICE OK DEVICEID=\"JohnAughey\"";
+        let command = Command::parse(DATA).unwrap();
+        assert_eq!(
+            command,
+            Command::AddDevice(AddDevice {
+                success: true,
+                device_id: "JohnAughey".into()
+            })
+        );
     }
 }

@@ -15,15 +15,15 @@ async fn main() -> Result<()> {
 
     let args = Cli::parse();
 
-    // Connect to device
-    let mut deck =  StreamDeck::connect(0x0fd9, 0x0063, None)?;
+    // // Connect to device
+    // let mut deck =  StreamDeck::connect(0x0fd9, 0x0063, None)?;
 
-    let serial = deck.serial().unwrap();
-    info!(
-        "Connected to device {}", serial
-    );
+    // let serial = deck.serial().unwrap();
+    // info!(
+    //     "Connected to device {}", serial
+    // );
 
-    info!("Connecting to {}:{}", args.host, args.port);
+    // info!("Connecting to {}:{}", args.host, args.port);
 
     // open up an async tcp connection to the host and port
     // and send a message

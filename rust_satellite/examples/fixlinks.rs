@@ -32,7 +32,7 @@ fn process_dir(
         let metadata = entry.metadata().ok()?;
         let filetype = metadata.file_type();
         if filetype.is_dir() && !filetype.is_symlink() {
-            Some(path.clone())
+            Some(path)
         } else {
             None
         }
