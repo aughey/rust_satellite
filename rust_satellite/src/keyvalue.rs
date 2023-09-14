@@ -54,24 +54,27 @@ fn quoted_string(data: &str) -> IResult<&str, StringOrStr> {
         // Move forward until we find a backslash or a quote
         let (data, value) = take_while(|c: char| c != '\\' && c != '"')(head)?;
 
-        // look at the next char, if it's a quote, we're done, consume it and return
+        // look at the next char, if it's a quote, we're done, it was consumed so return
         let (data, maybe_quote) = take(1usize)(data)?;
         if maybe_quote == "\"" {
             // if we've accumulated strings so far, add this to the end and return,
             // otherwise we return the string reference and don't allocate.
-            match accum {
-                Some(accum) => {
-                    return Ok((data, StringOrStr::String(accum + value)));
-                }
-                None => {
-                    return Ok((data, StringOrStr::Str(value)));
-                }
-            }
+            return match accum {
+                Some(accum) => Ok((data, StringOrStr::String(accum + value))),
+                None => Ok((data, StringOrStr::Str(value))),
+            };
         }
         // Crap, there's a backslash
-        // create an accumulator if we haven't already and append the string we've parsed so far
-        accum.get_or_insert_with(|| value.to_string());
 
+        // create an accumulator if we haven't already and append the string we've parsed so far
+        let to_append = accum.get_or_insert_with(|| String::new());
+        to_append.push_str(value);
+
+        // since we have a backslash, we need to parse the next character and append that too
+        let (data, escaped_char) = take(1usize)(data)?;
+        to_append.push_str(escaped_char);
+
+        // Move the head forward and look for the next one.
         head = data;
     }
 }
@@ -195,5 +198,13 @@ mod tests {
         assert_eq!(key_values.len(), 2);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
         assert_eq!(key_values.get("foo").unwrap(), "bar".into());
+    }
+
+    #[test]
+    fn test_keyvalue_backslash_value() {
+        const DATA: &str = "key=\"value\\\"\"";
+        let key_values = ParseMap::try_from(DATA).expect(&format!("Properly parsed {}", DATA));
+        assert_eq!(key_values.len(), 1);
+        assert_eq!(key_values.get("key").unwrap(), "value\"".into());
     }
 }
