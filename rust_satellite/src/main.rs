@@ -1,9 +1,9 @@
-use std::{sync::Arc, thread, time::Duration};
+use std::sync::Arc;
 
 use clap::Parser;
 use rust_satellite::{Cli, Result};
 
-use elgato_streamdeck::{asynchronous, list_devices, new_hidapi, StreamDeck};
+use elgato_streamdeck::{asynchronous, images::ImageRect, list_devices, new_hidapi};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::Mutex,
@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
         let writer = writer.clone();
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 let mut writer = writer.lock().await;
                 writer.write_all(b"PING\n").await.unwrap();
                 writer.flush().await.unwrap();
@@ -61,16 +61,20 @@ async fn main() -> Result<()> {
         });
     }
 
-    const DEVICE_ID: &str = "JohnAughey";
+    let device_id = device.serial_number().await?;
 
     {
         // button reader task
         let writer = writer.clone();
         let device = device.clone();
+        let device_id = device_id.clone();
         tokio::spawn(async move {
-            let mut keystate  = [false; 16];
+            let mut keystate = [false; 16];
             loop {
-                let buttons = device.read_input(60.0).await.expect("Error reading input from device");
+                let buttons = device
+                    .read_input(60.0)
+                    .await
+                    .expect("Error reading input from device");
                 match buttons {
                     elgato_streamdeck::StreamDeckInput::NoData => {}
                     elgato_streamdeck::StreamDeckInput::ButtonStateChange(buttons) => {
@@ -82,9 +86,14 @@ async fn main() -> Result<()> {
                             }
                             keystate[index] = button;
                             let pressed = if button { 1 } else { 0 };
-                            let msg = format!("KEY-PRESS DEVICEID={DEVICE_ID} KEY={index} PRESSED={pressed}\n");
+                            let msg = format!(
+                                "KEY-PRESS DEVICEID={device_id} KEY={index} PRESSED={pressed}\n"
+                            );
                             info!("Sending: {}", msg);
-                            writer.write_all(msg.as_bytes()).await.expect("write failed");
+                            writer
+                                .write_all(msg.as_bytes())
+                                .await
+                                .expect("write failed");
                         }
                         writer.flush().await.expect("flush");
                     }
@@ -120,7 +129,7 @@ async fn main() -> Result<()> {
                 format!(
                     "ADD-DEVICE {}\n",
                     rust_satellite::DeviceMsg {
-                        device_id: DEVICE_ID.to_string(),
+                        device_id: device_id.clone(),
                         product_name: "Satellite StreamDeck: plus".to_string(),
                         keys_total: 16,
                         keys_per_row: 4,
@@ -133,6 +142,8 @@ async fn main() -> Result<()> {
     }
 
     let mut lines = BufReader::new(reader).lines();
+    let lcd_width = 120;
+    let lcd_height = 120;
 
     while let Some(line) = lines.next_line().await? {
         let command = rust_satellite::Command::parse(&line)
@@ -161,10 +172,25 @@ async fn main() -> Result<()> {
                             .set_button_image(
                                 keystate.key as u8,
                                 image::DynamicImage::ImageRgb8(
-                                    image::ImageBuffer::from_vec(120, 120, keystate.bitmap()?)
+                                    image::ImageBuffer::from_vec(lcd_width, lcd_height, keystate.bitmap()?)
                                         .unwrap(),
                                 ),
                             )
+                            .await?;
+                    }
+                    8..=11 => {
+                        info!("Writing image to LCD panel");
+                        const PANEL_WIDTH: u32 = 800;
+                        const PANEL_HEIGHT: u32 = 100;
+                        let image = image::DynamicImage::ImageRgb8(
+                            image::ImageBuffer::from_vec(lcd_width, lcd_height, keystate.bitmap()?).unwrap(),
+                        );
+                        // resize image to the height
+                        let image = image.resize(image.width(), PANEL_HEIGHT, image::imageops::FilterType::Gaussian);
+                        let button_x_offset = (keystate.key as u32 - 8) * ((PANEL_WIDTH - lcd_width) / 3);
+                        let rect = Arc::new(ImageRect::from_image(image).unwrap());
+                        device
+                            .write_lcd(button_x_offset as u16, 0 as u16, rect)
                             .await?;
                     }
                     id => {

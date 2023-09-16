@@ -11,7 +11,7 @@ fn main() {
     let (kind, serial) = list_devices(&hid).remove(0);
 
     // Connect to the device
-    let mut device = StreamDeck::connect(&hid, kind, &serial).expect("Failed to connect");
+    let device = StreamDeck::connect(&hid, kind, &serial).expect("Failed to connect");
 
     // Print out some info from the device
     println!(
