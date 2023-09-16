@@ -8,7 +8,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::Mutex,
 };
-use tracing::{info, trace};
+use tracing::{info, trace, debug};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
     let device = asynchronous::AsyncStreamDeck::connect(&hid, kind, &serial)?;
 
     // Print out some info from the device
-    println!(
+    info!(
         "Connected to '{}' with version '{}'",
         device.serial_number().await?,
         device.firmware_version().await?
@@ -70,6 +70,9 @@ async fn main() -> Result<()> {
         let device_id = device_id.clone();
         tokio::spawn(async move {
             let mut keystate = [false; 16];
+
+            
+
             loop {
                 let buttons = device
                     .read_input(60.0)
@@ -78,7 +81,7 @@ async fn main() -> Result<()> {
                 match buttons {
                     elgato_streamdeck::StreamDeckInput::NoData => {}
                     elgato_streamdeck::StreamDeckInput::ButtonStateChange(buttons) => {
-                        println!("Button {:?} pressed", buttons);
+                        debug!("Button {:?} pressed", buttons);
                         let mut writer = writer.lock().await;
                         for (index, button) in buttons.into_iter().enumerate().take(8) {
                             if keystate[index] == button {
@@ -89,7 +92,7 @@ async fn main() -> Result<()> {
                             let msg = format!(
                                 "KEY-PRESS DEVICEID={device_id} KEY={index} PRESSED={pressed}\n"
                             );
-                            info!("Sending: {}", msg);
+                            debug!("Sending: {}", msg);
                             writer
                                 .write_all(msg.as_bytes())
                                 .await
@@ -98,20 +101,55 @@ async fn main() -> Result<()> {
                         writer.flush().await.expect("flush");
                     }
                     elgato_streamdeck::StreamDeckInput::EncoderStateChange(encoder) => {
-                        println!("Encoder {:?} changed", encoder);
+                        debug!("Encoder {:?} changed", encoder);
+                        let mut writer = writer.lock().await;
+                        for (index, state) in encoder.into_iter().enumerate().take(4) {
+                            let index = index + 8 + 4;
+                            if keystate[index] == state {
+                                continue;
+                            }
+                            keystate[index] = state;
+                            let pressed = if state { 1 } else { 0 };
+                            let msg = format!(
+                                "KEY-PRESS DEVICEID={device_id} KEY={index} PRESSED={pressed}\n"
+                            );
+                            debug!("Sending: {}", msg);
+                            writer
+                                .write_all(msg.as_bytes())
+                                .await
+                                .expect("write failed");
+                        }
+                        writer.flush().await.expect("flush");
                     }
 
                     elgato_streamdeck::StreamDeckInput::EncoderTwist(encoder) => {
-                        println!("Encoder {:?} twisted", encoder);
+                        debug!("Encoder {:?} twisted", encoder);
+
+                        for (index, direction) in encoder.into_iter().enumerate() {
+                            let button_id = index + 8+4;
+                            if direction == 0 {
+                                continue;
+                            }
+                            let count = direction.abs();
+                            let direction = if direction < 0 { 0 } else { 1 };
+                            let msg = format!("KEY-ROTATE DEVICEID={device_id} KEY={button_id} DIRECTION={direction}\n");
+                            debug!("Sending: {}", msg);
+                            let msg = msg.as_bytes();
+                            let mut writer = writer.lock().await;
+                            for _ in 0..count {
+                                writer.write_all(msg).await.expect("write failed");
+                            }
+                            writer.flush().await.expect("flush");
+                        }
                     }
                     elgato_streamdeck::StreamDeckInput::TouchScreenPress(x, y) => {
-                        println!("Touchscreen pressed at {},{}", x, y);
+                        debug!("Touchscreen pressed at {},{}", x, y);
                     }
                     elgato_streamdeck::StreamDeckInput::TouchScreenLongPress(x, y) => {
-                        println!("Touchscreen long pressed at {},{}", x, y);
+                        debug!("Touchscreen long pressed at {},{}", x, y);
                     }
                     elgato_streamdeck::StreamDeckInput::TouchScreenSwipe(from, to) => {
-                        println!(
+                        debug!(
                             "Touchscreen swiped from {},{} to {},{}",
                             from.0, from.1, to.0, to.1
                         );
@@ -151,43 +189,56 @@ async fn main() -> Result<()> {
 
         match command {
             rust_satellite::Command::KeyPress(data) => {
-                info!("Received key press: {data}");
+                debug!("Received key press: {data}");
+            }
+            rust_satellite::Command::KeyRotate(data) => {
+                debug!("Received key rotate: {data}");
             }
             rust_satellite::Command::Pong => {
                 trace!("Received PONG");
             }
             rust_satellite::Command::Begin(versions) => {
-                info!("Beginning communication: {:?}", versions);
+                debug!("Beginning communication: {:?}", versions);
             }
             rust_satellite::Command::AddDevice(device) => {
-                info!("Adding device: {:?}", device);
+                debug!("Adding device: {:?}", device);
             }
             rust_satellite::Command::KeyState(keystate) => {
-                info!("Received key state: {:?}", keystate);
-                info!("  bitmap size: {}", keystate.bitmap()?.len());
+                debug!("Received key state: {:?}", keystate);
+                debug!("  bitmap size: {}", keystate.bitmap()?.len());
                 match keystate.key {
                     0..=7 => {
-                        info!("Writing image to button");
+                        debug!("Writing image to button");
                         device
                             .set_button_image(
                                 keystate.key as u8,
                                 image::DynamicImage::ImageRgb8(
-                                    image::ImageBuffer::from_vec(lcd_width, lcd_height, keystate.bitmap()?)
-                                        .unwrap(),
+                                    image::ImageBuffer::from_vec(
+                                        lcd_width,
+                                        lcd_height,
+                                        keystate.bitmap()?,
+                                    )
+                                    .unwrap(),
                                 ),
                             )
                             .await?;
                     }
                     8..=11 => {
-                        info!("Writing image to LCD panel");
+                        debug!("Writing image to LCD panel");
                         const PANEL_WIDTH: u32 = 800;
                         const PANEL_HEIGHT: u32 = 100;
                         let image = image::DynamicImage::ImageRgb8(
-                            image::ImageBuffer::from_vec(lcd_width, lcd_height, keystate.bitmap()?).unwrap(),
+                            image::ImageBuffer::from_vec(lcd_width, lcd_height, keystate.bitmap()?)
+                                .unwrap(),
                         );
                         // resize image to the height
-                        let image = image.resize(image.width(), PANEL_HEIGHT, image::imageops::FilterType::Gaussian);
-                        let button_x_offset = (keystate.key as u32 - 8) * ((PANEL_WIDTH - lcd_width) / 3);
+                        let image = image.resize(
+                            image.width(),
+                            PANEL_HEIGHT,
+                            image::imageops::FilterType::Gaussian,
+                        );
+                        let button_x_offset =
+                            (keystate.key as u32 - 8) * ((PANEL_WIDTH - lcd_width) / 3);
                         let rect = Arc::new(ImageRect::from_image(image).unwrap());
                         device
                             .write_lcd(button_x_offset as u16, 0 as u16, rect)
@@ -195,16 +246,16 @@ async fn main() -> Result<()> {
                     }
                     id => {
                         // ignore for now...
-                        info!("Ignoring button out of range: {}", id);
+                        debug!("Ignoring button out of range: {}", id);
                     }
                 }
             }
             rust_satellite::Command::Brightness(brightness) => {
-                info!("Received brightness: {:?}", brightness);
+                debug!("Received brightness: {:?}", brightness);
                 device.set_brightness(brightness.brightness).await?;
             }
             rust_satellite::Command::Unknown(command) => {
-                info!("Unknown command: {} with data {}", command, line.len());
+                debug!("Unknown command: {} with data {}", command, line.len());
             }
         }
     }

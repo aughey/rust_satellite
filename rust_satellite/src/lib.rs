@@ -16,6 +16,7 @@ pub struct Cli {
 pub enum Command<'a> {
     Pong,
     KeyPress(&'a str),
+    KeyRotate(&'a str),
     Begin(Versions<'a>),
     AddDevice(AddDevice<'a>),
     KeyState(KeyState<'a>),
@@ -45,6 +46,7 @@ impl Command<'_> {
         match command {
             "PONG" => return Ok(Command::Pong),
             "KEY-PRESS" => return Ok(Command::KeyPress(data)),
+            "KEY-ROTATE" => return Ok(Command::KeyRotate(data)),
             _ => {}
         }
 
