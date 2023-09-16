@@ -68,17 +68,25 @@ async fn main() -> Result<()> {
         let writer = writer.clone();
         let device = device.clone();
         tokio::spawn(async move {
+            let mut keystate  = [false; 16];
             loop {
-                let buttons = device.read_input(20.0).await.expect("Error reading input from device");
+                let buttons = device.read_input(60.0).await.expect("Error reading input from device");
                 match buttons {
                     elgato_streamdeck::StreamDeckInput::NoData => {}
                     elgato_streamdeck::StreamDeckInput::ButtonStateChange(buttons) => {
                         println!("Button {:?} pressed", buttons);
                         let mut writer = writer.lock().await;
                         for (index, button) in buttons.into_iter().enumerate().take(8) {
+                            if keystate[index] == button {
+                                continue;
+                            }
+                            keystate[index] = button;
                             let pressed = if button { 1 } else { 0 };
-                            writer.write_all(format!("KEY-PRESS DEVICEID={DEVICE_ID} KEY={index} PRESSED={pressed}\n").as_bytes()).await.expect("write failed");
+                            let msg = format!("KEY-PRESS DEVICEID={DEVICE_ID} KEY={index} PRESSED={pressed}\n");
+                            info!("Sending: {}", msg);
+                            writer.write_all(msg.as_bytes()).await.expect("write failed");
                         }
+                        writer.flush().await.expect("flush");
                     }
                     elgato_streamdeck::StreamDeckInput::EncoderStateChange(encoder) => {
                         println!("Encoder {:?} changed", encoder);
