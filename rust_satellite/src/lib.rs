@@ -15,6 +15,7 @@ pub struct Cli {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command<'a> {
     Pong,
+    KeyPress(&'a str),
     Begin(Versions<'a>),
     AddDevice(AddDevice<'a>),
     KeyState(KeyState<'a>),
@@ -39,6 +40,13 @@ impl Command<'_> {
         let data = data
             .get(command.len()..)
             .ok_or_else(|| anyhow::anyhow!("Dev Error: this must succeed"))?;
+
+        // shortcut
+        match command {
+            "PONG" => return Ok(Command::Pong),
+            "KEY-PRESS" => return Ok(Command::KeyPress(data)),
+            _ => {}
+        }
 
         // annoying!, ADD-DEVICE has an extra OK value that doesn't match the key=value format
         // so strip that off if it's there.
