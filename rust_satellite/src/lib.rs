@@ -212,8 +212,8 @@ pub struct Versions<'a> {
 pub struct DeviceMsg {
     pub device_id: String,
     pub product_name: String,
-    pub keys_total: u32,
-    pub keys_per_row: u32,
+    pub keys_total: u8,
+    pub keys_per_row: u8,
 }
 impl DeviceMsg {
     pub fn device_msg(&self) -> String {

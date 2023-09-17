@@ -1,14 +1,14 @@
-use std::{sync::Arc, ops::DerefMut};
+use std::{ops::DerefMut, sync::Arc};
 
 use clap::Parser;
-use rust_satellite::{Cli, Result, ButtonState};
+use rust_satellite::{ButtonState, Cli, Result};
 
 use elgato_streamdeck::{asynchronous, images::ImageRect, list_devices, new_hidapi};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::Mutex,
 };
-use tracing::{info, trace, debug};
+use tracing::{debug, info, trace};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -81,20 +81,35 @@ async fn main() -> Result<()> {
                     elgato_streamdeck::StreamDeckInput::ButtonStateChange(buttons) => {
                         debug!("Button {:?} pressed", buttons);
                         let mut writer = writer.lock().await;
-                        keystate.update_all(buttons.into_iter().take(8).enumerate(), writer.deref_mut(), &device_id).await.expect("success");
+                        keystate
+                            .update_all(
+                                buttons.into_iter().take(8).enumerate(),
+                                writer.deref_mut(),
+                                &device_id,
+                            )
+                            .await
+                            .expect("success");
                     }
                     elgato_streamdeck::StreamDeckInput::EncoderStateChange(encoder) => {
                         debug!("Encoder {:?} changed", encoder);
                         let mut writer = writer.lock().await;
-                        let states = encoder.into_iter().take(4).enumerate().map(|(index, state)| (index + 8 + 4, state)).collect::<Vec<_>>();
-                        keystate.update_all(states, writer.deref_mut(), &device_id).await.expect("success");
+                        let states = encoder
+                            .into_iter()
+                            .take(4)
+                            .enumerate()
+                            .map(|(index, state)| (index + 8 + 4, state))
+                            .collect::<Vec<_>>();
+                        keystate
+                            .update_all(states, writer.deref_mut(), &device_id)
+                            .await
+                            .expect("success");
                     }
 
                     elgato_streamdeck::StreamDeckInput::EncoderTwist(encoder) => {
                         debug!("Encoder {:?} twisted", encoder);
 
                         for (index, direction) in encoder.into_iter().enumerate() {
-                            let button_id = index + 8+4;
+                            let button_id = index + 8 + 4;
                             if direction == 0 {
                                 continue;
                             }
@@ -130,6 +145,7 @@ async fn main() -> Result<()> {
     // tell it there is a device
     {
         let mut writer = writer.lock().await;
+        let kind = device.kind();
         writer
             .write_all(
                 format!(
@@ -137,8 +153,8 @@ async fn main() -> Result<()> {
                     rust_satellite::DeviceMsg {
                         device_id: device_id.clone(),
                         product_name: "Satellite StreamDeck: plus".to_string(),
-                        keys_total: 16,
-                        keys_per_row: 4,
+                        keys_total: kind.key_count(),
+                        keys_per_row: kind.column_count()
                     }
                     .device_msg()
                 )
@@ -174,12 +190,24 @@ async fn main() -> Result<()> {
             rust_satellite::Command::KeyState(keystate) => {
                 debug!("Received key state: {:?}", keystate);
                 debug!("  bitmap size: {}", keystate.bitmap()?.len());
-                match keystate.key {
-                    0..=7 => {
+                let kind = device.kind();
+
+                let in_button_range = (keystate.key < kind.key_count()).then(|| keystate.key);
+
+                let in_lcd_button = if in_button_range.is_some() {
+                    None
+                } else {
+                    kind.lcd_strip_size()
+                        .map(|_| kind.key_count() - keystate.key)
+                        .filter(|index| index < &kind.column_count())
+                };
+
+                match (in_button_range, in_lcd_button) {
+                    (Some(key), _) => {
                         debug!("Writing image to button");
                         device
                             .set_button_image(
-                                keystate.key as u8,
+                                key,
                                 image::DynamicImage::ImageRgb8(
                                     image::ImageBuffer::from_vec(
                                         lcd_width,
@@ -191,7 +219,7 @@ async fn main() -> Result<()> {
                             )
                             .await?;
                     }
-                    8..=11 => {
+                    (None, Some(lcd_key)) => {
                         debug!("Writing image to LCD panel");
                         const PANEL_WIDTH: u32 = 800;
                         const PANEL_HEIGHT: u32 = 100;
@@ -206,15 +234,14 @@ async fn main() -> Result<()> {
                             image::imageops::FilterType::Gaussian,
                         );
                         let button_x_offset =
-                            (keystate.key as u32 - 8) * ((PANEL_WIDTH - lcd_width) / 3);
+                            (lcd_key as u32 - 8) * ((PANEL_WIDTH - lcd_width) / 3);
                         let rect = Arc::new(ImageRect::from_image(image).unwrap());
                         device
                             .write_lcd(button_x_offset as u16, 0 as u16, rect)
                             .await?;
                     }
-                    id => {
-                        // ignore for now...
-                        debug!("Ignoring button out of range: {}", id);
+                    _ => {
+                        debug!("Key out of range {:?}", keystate);
                     }
                 }
             }
