@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{sync::Arc, ops::DerefMut};
 
 use clap::Parser;
-use rust_satellite::{Cli, Result};
+use rust_satellite::{Cli, Result, ButtonState};
 
 use elgato_streamdeck::{asynchronous, images::ImageRect, list_devices, new_hidapi};
 use tokio::{
@@ -69,9 +69,7 @@ async fn main() -> Result<()> {
         let device = device.clone();
         let device_id = device_id.clone();
         tokio::spawn(async move {
-            let mut keystate = [false; 16];
-
-            
+            let mut keystate = ButtonState::new(16);
 
             loop {
                 let buttons = device
@@ -83,43 +81,13 @@ async fn main() -> Result<()> {
                     elgato_streamdeck::StreamDeckInput::ButtonStateChange(buttons) => {
                         debug!("Button {:?} pressed", buttons);
                         let mut writer = writer.lock().await;
-                        for (index, button) in buttons.into_iter().enumerate().take(8) {
-                            if keystate[index] == button {
-                                continue;
-                            }
-                            keystate[index] = button;
-                            let pressed = if button { 1 } else { 0 };
-                            let msg = format!(
-                                "KEY-PRESS DEVICEID={device_id} KEY={index} PRESSED={pressed}\n"
-                            );
-                            debug!("Sending: {}", msg);
-                            writer
-                                .write_all(msg.as_bytes())
-                                .await
-                                .expect("write failed");
-                        }
-                        writer.flush().await.expect("flush");
+                        keystate.update_all(buttons.into_iter().take(8).enumerate(), writer.deref_mut(), &device_id).await.expect("success");
                     }
                     elgato_streamdeck::StreamDeckInput::EncoderStateChange(encoder) => {
                         debug!("Encoder {:?} changed", encoder);
                         let mut writer = writer.lock().await;
-                        for (index, state) in encoder.into_iter().enumerate().take(4) {
-                            let index = index + 8 + 4;
-                            if keystate[index] == state {
-                                continue;
-                            }
-                            keystate[index] = state;
-                            let pressed = if state { 1 } else { 0 };
-                            let msg = format!(
-                                "KEY-PRESS DEVICEID={device_id} KEY={index} PRESSED={pressed}\n"
-                            );
-                            debug!("Sending: {}", msg);
-                            writer
-                                .write_all(msg.as_bytes())
-                                .await
-                                .expect("write failed");
-                        }
-                        writer.flush().await.expect("flush");
+                        let states = encoder.into_iter().take(4).enumerate().map(|(index, state)| (index + 8 + 4, state)).collect::<Vec<_>>();
+                        keystate.update_all(states, writer.deref_mut(), &device_id).await.expect("success");
                     }
 
                     elgato_streamdeck::StreamDeckInput::EncoderTwist(encoder) => {

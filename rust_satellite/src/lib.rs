@@ -1,6 +1,8 @@
 pub use anyhow::Result;
 use clap::Parser;
 use keyvalue::StringOrStr;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
+use tracing::debug;
 pub mod keyvalue;
 
 #[derive(Parser)]
@@ -9,6 +11,49 @@ pub struct Cli {
     pub host: String,
     #[arg(short, long)]
     pub port: u16,
+}
+
+pub struct ButtonState {
+    buttons: Vec<bool>,
+}
+impl ButtonState {
+    pub fn new(size: usize) -> Self {
+        let mut v = Vec::with_capacity(size);
+        v.resize_with(size, || false);
+        Self { buttons: v }
+    }
+    pub async fn update_all(
+        &mut self,
+        states: impl IntoIterator<Item = (usize, bool)>,
+        writer: &mut (impl AsyncWrite + Unpin),
+        device_id: &str,
+    ) -> Result<()> {
+        for (index, state) in states {
+            self.update_button(index, state, writer, device_id).await?;
+        }
+        writer.flush().await?;
+        Ok(())
+    }
+    pub async fn update_button(
+        &mut self,
+        index: usize,
+        pressed: bool,
+        writer: &mut (impl AsyncWrite + Unpin),
+        device_id: &str,
+    ) -> Result<()> {
+        if self.buttons[index] == pressed {
+            Ok(())
+        } else {
+            self.buttons[index] = pressed;
+
+            let pressed = if pressed { 1 } else { 0 };
+
+            let msg = format!("KEY-PRESS DEVICEID={device_id} KEY={index} PRESSED={pressed}\n");
+            debug!("Sending: {}", msg);
+            writer.write_all(msg.as_bytes()).await?;
+            Ok(())
+        }
+    }
 }
 
 /// Commands that can be sent to the device
