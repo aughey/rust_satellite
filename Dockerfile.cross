@@ -1,5 +1,6 @@
 ARG CROSS_BASE_IMAGE
-FROM ghcr.io/cross-rs/arm-unknown-linux-gnueabihf:main
+#FROM ghcr.io/cross-rs/arm-unknown-linux-gnueabihf:main
+FROM ghcr.io/emilgardis/arm-unknown-linux-gnueabihf:pr-1333
 
 ARG CROSS_DEB_ARCH
 
