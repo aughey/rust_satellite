@@ -9,7 +9,7 @@ edition = "2021"
 anyhow = "1.0.75"
 base64 = "0.21.4"
 clap = { version = "4.4.2", features = ["derive"] }
-elgato-streamdeck = { git = "https://github.com/streamduck-org/elgato-streamdeck.git", version = "0.4.1", features = ["async"] }
+elgato-streamdeck = { path = "../elgato-streamdeck", features = ["async"] }
 image = "0.24.7"
 nom = "7.1.3"
 serde = { version = "1.0.188", features = ["derive"] }

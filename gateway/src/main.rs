@@ -1,9 +1,7 @@
 use std::{ops::DerefMut, sync::Arc};
-
 use clap::Parser;
-use rust_satellite::{ButtonState, Cli, Result};
-
-use elgato_streamdeck::{asynchronous, images::ImageRect, info::Kind, list_devices, new_hidapi};
+use gateway::{ButtonState, Cli, Result};
+use elgato_streamdeck::{images::ImageRect, info::Kind, list_devices, new_hidapi};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     sync::Mutex,
@@ -152,7 +150,7 @@ async fn main() -> Result<()> {
             .write_all(
                 format!(
                     "ADD-DEVICE {}\n",
-                    rust_satellite::DeviceMsg {
+                    gateway::DeviceMsg {
                         device_id: device_id.clone(),
                         product_name: format!("RustSatellite StreamDeck: {}", device_name(&kind)),
                         keys_total: kind.key_count(),
@@ -171,26 +169,26 @@ async fn main() -> Result<()> {
 
     while let Some(line) = lines.next_line().await? {
         trace!("Received line: {}", line);
-        let command = rust_satellite::Command::parse(&line)
+        let command = gateway::Command::parse(&line)
             .map_err(|e| anyhow::anyhow!("Error parsing line: {}, {:?}", line, e))?;
 
         match command {
-            rust_satellite::Command::KeyPress(data) => {
+            gateway::Command::KeyPress(data) => {
                 debug!("Received key press: {data}");
             }
-            rust_satellite::Command::KeyRotate(data) => {
+            gateway::Command::KeyRotate(data) => {
                 debug!("Received key rotate: {data}");
             }
-            rust_satellite::Command::Pong => {
+            gateway::Command::Pong => {
                 //trace!("Received PONG");
             }
-            rust_satellite::Command::Begin(versions) => {
+            gateway::Command::Begin(versions) => {
                 debug!("Beginning communication: {:?}", versions);
             }
-            rust_satellite::Command::AddDevice(device) => {
+            gateway::Command::AddDevice(device) => {
                 debug!("Adding device: {:?}", device);
             }
-            rust_satellite::Command::KeyState(keystate) => {
+            gateway::Command::KeyState(keystate) => {
                 debug!("Received key state: {:?}", keystate);
                 debug!("  bitmap size: {}", keystate.bitmap()?.len());
                 let kind = device.kind();
@@ -243,11 +241,11 @@ async fn main() -> Result<()> {
                     }
                 }
             }
-            rust_satellite::Command::Brightness(brightness) => {
+            gateway::Command::Brightness(brightness) => {
                 debug!("Received brightness: {:?}", brightness);
                 device.set_brightness(brightness.brightness).await?;
             }
-            rust_satellite::Command::Unknown(command) => {
+            gateway::Command::Unknown(command) => {
                 debug!("Unknown command: {} with data {}", command, line.len());
             }
         }
