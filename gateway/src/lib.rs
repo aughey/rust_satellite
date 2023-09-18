@@ -4,7 +4,7 @@ use keyvalue::StringOrStr;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tracing::debug;
 pub mod keyvalue;
-pub mod stream_utils;
+pub use bin_comm::stream_utils;
 pub mod satellite;
 
 #[derive(Parser)]

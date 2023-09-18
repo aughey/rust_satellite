@@ -6,7 +6,9 @@
 	"image": "mcr.microsoft.com/devcontainers/rust:1-1-bullseye",
 	"features": {
 		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
-	}
+	},
+	// forward port 12345 to this
+	"forwardPorts": [12345]
 
 	// Use 'mounts' to make the cargo cache persistent in a Docker Volume.
 	// "mounts": [
