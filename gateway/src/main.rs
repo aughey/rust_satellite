@@ -159,6 +159,8 @@ where
     while let Some(line) = lines.next_line().await? {
         trace!("Received line: {}", line);
         let satellite_write_stream = satellite_write_stream.clone();
+        // Run the processing of EVERY line asynchronously.  This has the advantage of using
+        // as many cores as possible for image processing.
         tokio::spawn(async move {
             if let Err(e) = handle_companion_data(line, satellite_write_stream, kind, image_format).await {
                 tracing::error!("Error: {:?}",e);
