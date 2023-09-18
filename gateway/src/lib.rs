@@ -15,6 +15,10 @@ pub struct Cli {
     pub port: u16,
     #[arg(long)]
     pub listen_port: u16,
+    #[arg(long)]
+    #[clap(default_value = "0.0.0.0")]
+    pub listen_address: String
+
 }
 
 pub struct ButtonState {

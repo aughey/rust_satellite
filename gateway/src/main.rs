@@ -19,7 +19,7 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
 
     // Create an async tcp listener
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", args.listen_port)).await?;
+    let listener = tokio::net::TcpListener::bind((args.listen_address, args.listen_port)).await?;
     info!("Listening on port {}", args.listen_port);
 
     loop {
