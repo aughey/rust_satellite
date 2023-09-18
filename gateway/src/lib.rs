@@ -4,6 +4,8 @@ use keyvalue::StringOrStr;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tracing::debug;
 pub mod keyvalue;
+pub mod stream_utils;
+pub mod satellite;
 
 #[derive(Parser)]
 pub struct Cli {
@@ -11,6 +13,8 @@ pub struct Cli {
     pub host: String,
     #[arg(short, long)]
     pub port: u16,
+    #[arg(long)]
+    pub listen_port: u16,
 }
 
 pub struct ButtonState {
