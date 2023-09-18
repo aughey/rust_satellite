@@ -71,7 +71,7 @@ fn quoted_string(data: &str) -> IResult<&str, StringOrStr> {
         // Crap, there's a backslash
 
         // create an accumulator if we haven't already and append the string we've parsed so far
-        let to_append = accum.get_or_insert_with(|| String::new());
+        let to_append = accum.get_or_insert_with(String::new);
         to_append.push_str(value);
 
         // since we have a backslash, we need to parse the next character and append that too
@@ -161,6 +161,10 @@ impl StringOrStr<'_> {
     /// Length of internal string
     pub fn len(&self) -> usize {
         self.as_ref().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn as_str(&self) -> &str {

@@ -195,7 +195,7 @@ async fn main() -> Result<()> {
                 debug!("  bitmap size: {}", keystate.bitmap()?.len());
                 let kind = device.kind();
 
-                let in_button_range = (keystate.key < kind.key_count()).then(|| keystate.key);
+                let in_button_range = (keystate.key < kind.key_count()).then_some(keystate.key);
 
                 let in_lcd_button = if in_button_range.is_some() {
                     None
@@ -235,7 +235,7 @@ async fn main() -> Result<()> {
                             (lcd_key as u32 - 8) * ((lcd_width - image.width()) / 3);
                         let rect = Arc::new(ImageRect::from_image(image).unwrap());
                         device
-                            .write_lcd(button_x_offset as u16, 0 as u16, rect)
+                            .write_lcd(button_x_offset as u16, 0u16, rect)
                             .await?;
                     }
                     _ => {

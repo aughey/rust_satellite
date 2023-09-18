@@ -195,7 +195,7 @@ where
         gateway::Command::Begin(_) => {}
         gateway::Command::AddDevice(_) => {}
         gateway::Command::KeyState(keystate) => {
-            let in_button_range = (keystate.key < kind.key_count()).then(|| keystate.key);
+            let in_button_range = (keystate.key < kind.key_count()).then_some(keystate.key);
 
             let in_lcd_button = if in_button_range.is_some() {
                 None

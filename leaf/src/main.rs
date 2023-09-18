@@ -117,14 +117,14 @@ async fn device_to_gateway(
             elgato_streamdeck::StreamDeckInput::ButtonStateChange(buttons) => {
                 write_gateway(
                     &mut gateway_writer,
-                    RemoteCommands::ButtonChange(ButtonChange { buttons: buttons }),
+                    RemoteCommands::ButtonChange(ButtonChange { buttons }),
                 )
                 .await?
             }
-            elgato_streamdeck::StreamDeckInput::EncoderStateChange(encoder) => {
+            elgato_streamdeck::StreamDeckInput::EncoderStateChange(encoders) => {
                 write_gateway(
                     &mut gateway_writer,
-                    RemoteCommands::EncoderChange(EncoderChange { encoders: encoder }),
+                    RemoteCommands::EncoderChange(EncoderChange { encoders }),
                 )
                 .await?
             }
