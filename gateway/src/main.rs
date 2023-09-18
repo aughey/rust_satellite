@@ -151,7 +151,7 @@ where
 {
     let mut lines = BufReader::new(companion_read_stream).lines();
 
-    info!("Waiting for commands from companion...");
+    info!("Processing commands from companion.");
 
     // multiple access to write stream
     let satellite_write_stream = Arc::new(Mutex::new(satellite_write_stream));
@@ -323,7 +323,7 @@ where
         companion_write_stream.flush().await?;
     }
 
-    info!("Waiting for commands from satellite...");
+    info!("Processing commands from satellite.");
 
     loop {
         let command = satellite_read_command(&mut satellite_read_stream).await?;

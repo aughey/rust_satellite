@@ -6,10 +6,16 @@ My intended use is a remote control for an X32 audio mixer.  The desired use is 
 
 Currently the satellite application is written in NodeJS, and the makers do not recommend nor support it running on anything less than a Raspberry PI 4.  I believe this is due to the heavy-weight overhead of node and the (possibly) lack of availability of the toolsets for the lower powered PI computers.  However, I also believe the computer is adequetly powered and, if written in a compiled language like Rust, will be able to perform its function in a low-resource environment.
 
+# Update (gateway configuration)
+
+To follow up on the native pi zero satellite application I wrote last weekend, I have a new version that uses a gateway application running on the host to do the heavy lifting of image manipulation and formatting.  The configuration looks like `Companion <-- ascii --> Gateway <-- binary --> Leaf(pi)    The desire is to ship bits to the leaf nodes in the exact format that is needed to write to the device.
+
+This is now the intended use.
+
 # Building
 
 ```
-PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig cross build --release --target arm-unknown-linux-gnueabihf
+PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig cross build --bin leaf --release --target arm-unknown-linux-gnueabihf
 ```
 
 ```
