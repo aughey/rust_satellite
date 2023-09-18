@@ -252,7 +252,7 @@ mod tests {
     #[test]
     fn test_keyvalue_backslash_value() {
         const DATA: &str = "key=\"value\\\"\"";
-        let mut key_values = ParseMap::try_from(DATA).expect(&format!("Properly parsed {}", DATA));
+        let mut key_values = ParseMap::try_from(DATA).unwrap_or_else(|_| panic!("Properly parsed {}", DATA));
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value\"".into());
     }
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn test_keyvalue_space_after_equals() {
         const DATA: &str = "key = value";
-        let mut key_values = ParseMap::try_from(DATA).expect(&format!("Properly parsed {}", DATA));
+        let mut key_values = ParseMap::try_from(DATA).unwrap_or_else(|_| panic!("Properly parsed {}", DATA));
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
     }
