@@ -4,3 +4,6 @@
 [submodule "rust-streamdeck-updated"]
 	path = rust-streamdeck-updated
 	url = git@github.com:aughey/rust-streamdeck.git
+[submodule "elgato-streamdeck"]
+	path = elgato-streamdeck
+	url = https://github.com/aughey/elgato-streamdeck
