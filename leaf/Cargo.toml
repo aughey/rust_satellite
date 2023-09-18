@@ -13,3 +13,6 @@ elgato-streamdeck = { version = "0.4.1", path = "../elgato-streamdeck", features
 tokio = { version = "1.32.0", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
+
+[build]
+strip = "symbols"

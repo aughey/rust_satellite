@@ -1,2 +1,2 @@
 [workspace]
-members = ["rust_satellite","simple_deck","streamduck","gateway","leaf","bin_comm"]
+members = ["rust_satellite","gateway","leaf","bin_comm"]
