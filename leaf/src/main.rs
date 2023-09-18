@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use bin_comm::{ButtonChange, RemoteCommands, RemoteConfig};
+use bin_comm::{ButtonChange, EncoderChange, EncoderTwist, RemoteCommands, RemoteConfig};
 use clap::Parser;
 use elgato_streamdeck::{images::ImageRect, AsyncStreamDeck};
 use leaf::Cli;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -111,7 +111,7 @@ async fn device_to_gateway(
             .read_input(60.0)
             .await
             .expect("Error reading input from device");
-        debug!("Got usb command {:?}",buttons);
+        debug!("Got usb command {:?}", buttons);
         match buttons {
             elgato_streamdeck::StreamDeckInput::NoData => {}
             elgato_streamdeck::StreamDeckInput::ButtonStateChange(buttons) => {
@@ -121,8 +121,25 @@ async fn device_to_gateway(
                 )
                 .await?
             }
-            elgato_streamdeck::StreamDeckInput::EncoderStateChange(_) => todo!(),
-            elgato_streamdeck::StreamDeckInput::EncoderTwist(_) => todo!(),
+            elgato_streamdeck::StreamDeckInput::EncoderStateChange(encoder) => {
+                write_gateway(
+                    &mut gateway_writer,
+                    RemoteCommands::EncoderChange(EncoderChange { encoders: encoder }),
+                )
+                .await?
+            }
+            elgato_streamdeck::StreamDeckInput::EncoderTwist(twist) => {
+                for (index, value) in twist.into_iter().enumerate().filter(|(_i, v)| *v != 0) {
+                    write_gateway(
+                        &mut gateway_writer,
+                        RemoteCommands::EncoderTwist(EncoderTwist {
+                            index: index.try_into()?,
+                            value,
+                        }),
+                    )
+                    .await?;
+                }
+            }
             elgato_streamdeck::StreamDeckInput::TouchScreenPress(_, _) => todo!(),
             elgato_streamdeck::StreamDeckInput::TouchScreenLongPress(_, _) => todo!(),
             elgato_streamdeck::StreamDeckInput::TouchScreenSwipe(_, _) => todo!(),

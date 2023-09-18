@@ -1,2 +1,5 @@
 [workspace]
 members = ["rust_satellite","gateway","leaf","bin_comm"]
+
+[profile.release]
+strip = true
