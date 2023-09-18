@@ -141,106 +141,134 @@ where
 
 async fn companion_to_satellite<R, W>(
     companion_read_stream: R,
-    mut satellite_write_stream: W,
+    satellite_write_stream: W,
     kind: Kind,
     image_format: elgato_streamdeck::info::ImageFormat,
 ) -> Result<()>
 where
     R: AsyncRead + Unpin + Send + 'static,
-    W: AsyncWrite + Unpin,
+    W: AsyncWrite + Unpin + Send + 'static,
 {
     let mut lines = BufReader::new(companion_read_stream).lines();
 
     info!("Waiting for commands from companion...");
 
+    // multiple access to write stream
+    let satellite_write_stream = Arc::new(Mutex::new(satellite_write_stream));
+
     while let Some(line) = lines.next_line().await? {
         trace!("Received line: {}", line);
-        let command = gateway::Command::parse(&line)
-            .map_err(|e| anyhow::anyhow!("Error parsing line: {}, {:?}", line, e))?;
+        let satellite_write_stream = satellite_write_stream.clone();
+        tokio::spawn(async move {
+            if let Err(e) = handle_companion_data(line, satellite_write_stream, kind, image_format).await {
+                tracing::error!("Error: {:?}",e);
+            }
+        });
+    }
 
-        match command {
-            gateway::Command::Pong => {}
-            _ => debug!("Received companion command: {:?}", command),
-        }
+    Ok(())
+}
 
-        let (lcd_width, lcd_height) = kind.lcd_strip_size().unwrap_or((0, 0));
-        let (lcd_width, lcd_height) = (lcd_width as u32, lcd_height as u32);
+async fn handle_companion_data<W>(
+    line: String,
+    satellite_write_stream: Arc<Mutex<W>>,
+    kind: Kind,
+    image_format: elgato_streamdeck::info::ImageFormat,
+) -> Result<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    let command = gateway::Command::parse(&line)
+        .map_err(|e| anyhow::anyhow!("Error parsing line: {}, {:?}", line, e))?;
 
-        match command {
-            gateway::Command::Pong => {}
-            gateway::Command::KeyPress(_) => {}
-            gateway::Command::KeyRotate(_) => {}
-            gateway::Command::Begin(_) => {}
-            gateway::Command::AddDevice(_) => {}
-            gateway::Command::KeyState(keystate) => {
-                let in_button_range = (keystate.key < kind.key_count()).then(|| keystate.key);
+    match command {
+        gateway::Command::Pong => {}
+        _ => debug!("Received companion command: {:?}", command),
+    }
 
-                let in_lcd_button = if in_button_range.is_some() {
-                    None
-                } else {
-                    kind.lcd_strip_size()
-                        .map(|_| kind.key_count() - keystate.key)
-                        .filter(|index| index < &kind.column_count())
-                };
-                match (in_button_range, in_lcd_button) {
-                    (Some(key), _) => {
-                        debug!("Writing image to button");
-                        let image = image::DynamicImage::ImageRgb8(
-                            image::ImageBuffer::from_vec(120, 120, keystate.bitmap()?)
-                                .ok_or_else(|| anyhow::anyhow!("Couldn't extract image buffer"))?,
-                        );
-                        let image = image.resize_exact(
-                            image_format.size.0 as u32,
-                            image_format.size.1 as u32,
-                            image::imageops::FilterType::Lanczos3,
-                        );
-                        // Convert the image into the EXACT format needed for the remote device
-                        let image = elgato_streamdeck::images::convert_image(kind, image)?;
-                        // Send this to the satellite
-                        let image = DeviceCommands::SetButtonImage(SetButtonImage { key, image });
-                        write_struct(&mut satellite_write_stream, &image).await?;
-                    }
-                    (None, Some(lcd_key)) => {
-                        debug!("Writing image to LCD panel");
-                        let image = image::DynamicImage::ImageRgb8(
-                            image::ImageBuffer::from_vec(120, 120, keystate.bitmap()?).unwrap(),
-                        );
-                        // resize image to the height
-                        let image = image.resize(
-                            lcd_height,
-                            lcd_height,
-                            image::imageops::FilterType::Gaussian,
-                        );
-                        let button_x_offset =
-                            (lcd_key as u32 - 8) * ((lcd_width - image.width()) / 3);
+    match command {
+        gateway::Command::Pong => {}
+        gateway::Command::KeyPress(_) => {}
+        gateway::Command::KeyRotate(_) => {}
+        gateway::Command::Begin(_) => {}
+        gateway::Command::AddDevice(_) => {}
+        gateway::Command::KeyState(keystate) => {
+            let in_button_range = (keystate.key < kind.key_count()).then(|| keystate.key);
 
-                        // Convert the image into the EXACT format needed for the remote device
-                        let image = elgato_streamdeck::images::convert_image(kind, image)?;
-                        let image = DeviceCommands::SetLCDImage(SetLCDImage {
-                            x_offset: button_x_offset as u16,
-                            x_size: lcd_height as u16,
-                            y_size: lcd_height as u16,
-                            image,
-                        });
-                        // Send this to the satellite
-                        send_satellite_command(&mut satellite_write_stream, &image).await?;
-                    }
-                    _ => {
-                        debug!("Key out of range {:?}", keystate);
-                    }
+            let in_lcd_button = if in_button_range.is_some() {
+                None
+            } else {
+                kind.lcd_strip_size()
+                    .map(|_| kind.key_count() - keystate.key)
+                    .filter(|index| index < &kind.column_count())
+            };
+            // Run this in a separate task because it can be CPU intensive
+            // and we want to allow many image processing tasks to happen in
+            // parallel if it can.
+            match (in_button_range, in_lcd_button) {
+                (Some(key), _) => {
+                    debug!("Writing image to button");
+                    let image = image::DynamicImage::ImageRgb8(
+                        image::ImageBuffer::from_vec(120, 120, keystate.bitmap()?)
+                            .ok_or_else(|| anyhow::anyhow!("Couldn't extract image buffer"))?,
+                    );
+                    let image = image.resize_exact(
+                        image_format.size.0 as u32,
+                        image_format.size.1 as u32,
+                        image::imageops::FilterType::Lanczos3,
+                    );
+                    // Convert the image into the EXACT format needed for the remote device
+                    let image = elgato_streamdeck::images::convert_image(kind, image)?;
+                    // Send this to the satellite
+                    let image = DeviceCommands::SetButtonImage(SetButtonImage { key, image });
+                    let mut writer = satellite_write_stream.lock().await;
+                    write_struct(writer.deref_mut(), &image).await?;
+                }
+                (None, Some(lcd_key)) => {
+                    debug!("Writing image to LCD panel");
+
+                    let (lcd_width, lcd_height) = kind.lcd_strip_size().unwrap_or((0, 0));
+                    let (lcd_width, lcd_height) = (lcd_width as u32, lcd_height as u32);
+
+                    let image = image::DynamicImage::ImageRgb8(
+                        image::ImageBuffer::from_vec(120, 120, keystate.bitmap()?).unwrap(),
+                    );
+                    // resize image to the height
+                    let image = image.resize(
+                        lcd_height,
+                        lcd_height,
+                        image::imageops::FilterType::Gaussian,
+                    );
+                    let button_x_offset = (lcd_key as u32 - 8) * ((lcd_width - image.width()) / 3);
+
+                    // Convert the image into the EXACT format needed for the remote device
+                    let image = elgato_streamdeck::images::convert_image(kind, image)?;
+                    let image = DeviceCommands::SetLCDImage(SetLCDImage {
+                        x_offset: button_x_offset as u16,
+                        x_size: lcd_height as u16,
+                        y_size: lcd_height as u16,
+                        image,
+                    });
+                    // Send this to the satellite
+                    let mut writer = satellite_write_stream.lock().await;
+                    send_satellite_command(writer.deref_mut(), &image).await?;
+                }
+                _ => {
+                    debug!("Key out of range {:?}", keystate);
                 }
             }
-            gateway::Command::Brightness(brightness) => {
-                send_satellite_command(
-                    &mut satellite_write_stream,
-                    &DeviceCommands::SetBrightness(bin_comm::SetBrightness {
-                        brightness: brightness.brightness,
-                    }),
-                )
-                .await?
-            }
-            gateway::Command::Unknown(_) => todo!(),
         }
+        gateway::Command::Brightness(brightness) => {
+            let mut writer = satellite_write_stream.lock().await;
+            send_satellite_command(
+                writer.deref_mut(),
+                &DeviceCommands::SetBrightness(bin_comm::SetBrightness {
+                    brightness: brightness.brightness,
+                }),
+            )
+            .await?
+        }
+        gateway::Command::Unknown(_) => todo!(),
     }
 
     Ok(())
