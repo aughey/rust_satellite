@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use bin_comm::{ButtonChange, RemoteCommands};
+use bin_comm::{ButtonChange, RemoteCommands, RemoteConfig};
 use clap::Parser;
 use elgato_streamdeck::{images::ImageRect, AsyncStreamDeck};
 use leaf::Cli;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tracing::info;
+use tracing::{info, debug};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -66,6 +66,7 @@ async fn gateway_to_device(
     mut gateway_reader: impl AsyncRead + Unpin + Send,
     device: AsyncStreamDeck,
 ) -> Result<()> {
+    info!("Waiting for commands from gateway...");
     loop {
         let command =
             bin_comm::stream_utils::read_struct::<bin_comm::DeviceCommands>(&mut gateway_reader)
@@ -94,11 +95,23 @@ async fn device_to_gateway(
     mut gateway_writer: impl AsyncWrite + Unpin + Send,
     device: AsyncStreamDeck,
 ) -> Result<()> {
+    write_gateway(
+        &mut gateway_writer,
+        RemoteCommands::Config(RemoteConfig {
+            device_id: device.serial_number().await?,
+            pid: device.kind().product_id(),
+        }),
+    )
+    .await?;
+
+    info!("Waiting for commands from USB device...");
+
     loop {
         let buttons = device
             .read_input(60.0)
             .await
             .expect("Error reading input from device");
+        debug!("Got usb command {:?}",buttons);
         match buttons {
             elgato_streamdeck::StreamDeckInput::NoData => {}
             elgato_streamdeck::StreamDeckInput::ButtonStateChange(buttons) => {

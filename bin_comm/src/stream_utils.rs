@@ -37,6 +37,7 @@ pub async fn write_length_prefix(
 
     // Write the actual message
     stream.write_all(buf).await?;
+    stream.flush().await?;
     Ok(())
 }
 
