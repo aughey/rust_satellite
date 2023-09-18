@@ -192,7 +192,7 @@ where
                         let image = image.resize_exact(
                             image_format.size.0 as u32,
                             image_format.size.1 as u32,
-                            image::imageops::FilterType::Nearest,
+                            image::imageops::FilterType::Lanczos3,
                         );
                         // Convert the image into the EXACT format needed for the remote device
                         let image = elgato_streamdeck::images::convert_image(kind, image)?;
