@@ -83,8 +83,15 @@ where
     );
 
     let companion_receiver = companion::receiver::Receiver::new(companion_read_stream, kind);
-    let companion_sender =
-        companion::sender::Sender::new(companion_write_stream, config.device_id.to_string());
+    let companion_sender = companion::sender::Sender::new(
+        companion_write_stream,
+        config.device_id.to_string(),
+        "zzzz",
+        kind.key_count().into(),
+        kind.column_count().into(),
+        kind.key_image_format().size.0.try_into()?,
+    )
+    .await?;
 
     pumps::message_pump(
         device_sender,

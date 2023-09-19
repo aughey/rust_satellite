@@ -17,15 +17,39 @@ impl<W> Sender<W>
 where
     W: AsyncWrite + Unpin + Send + 'static,
 {
-    pub fn new(writer: W, device_id: String) -> Self {
+    pub async fn new(
+        mut writer: W,
+        device_id: String,
+        product_name: &str,
+        keys_total: usize,
+        keys_per_row: usize,
+        resolution: u16
+    ) -> Result<Self> {
+        writer
+            .write_all(
+                format!(
+                    "ADD-DEVICE {}\n",
+                    crate::DeviceMsg {
+                        device_id: device_id.clone(),
+                        product_name: format!("RustSatellite StreamDeck: {product_name}",),
+                        keys_total: keys_total.try_into()?,
+                        keys_per_row: keys_per_row.try_into()?,
+                        resolution
+                    }
+                    .device_msg()
+                )
+                .as_bytes(),
+            )
+            .await?;
+
         let writer = Arc::new(Mutex::new(writer));
         let ping = tokio::spawn(companion_ping(writer.clone()));
 
-        Self {
+        Ok(Self {
             ping,
             device_id,
             writer,
-        }
+        })
     }
 }
 impl<T> Drop for Sender<T> {
@@ -39,11 +63,12 @@ async fn companion_ping<W>(companion_write_stream: Arc<Mutex<W>>) -> Result<()>
 where
     W: AsyncWrite + Unpin + Send + 'static,
 {
+    debug!("Starting ping task");
     loop {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         let mut companion_write_stream = companion_write_stream.lock().await;
-        companion_write_stream.write_all(b"PING\n").await.unwrap();
-        companion_write_stream.flush().await.unwrap();
+        companion_write_stream.write_all(b"PING\n").await?;
+        companion_write_stream.flush().await?;
     }
 }
 
@@ -69,7 +94,7 @@ where
     }
     async fn encoder_twist(&mut self, encoders: EncoderTwist) -> Result<()> {
         let mut writer = self.writer.lock().await;
-        for (index,value) in encoders.encoders {
+        for (index, value) in encoders.encoders {
             let count = value.abs();
             let direction = if value < 0 { 0 } else { 1 };
             let button_id = index;

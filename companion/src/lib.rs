@@ -156,6 +156,22 @@ pub struct Versions<'a> {
     pub api_version: StringOrStr<'a>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct DeviceMsg {
+    pub device_id: String,
+    pub product_name: String,
+    pub keys_total: u8,
+    pub keys_per_row: u8,
+    pub resolution: u16,
+}
+impl DeviceMsg {
+    pub fn device_msg(&self) -> String {
+        format!("DEVICEID={} PRODUCT_NAME=\"{}\" KEYS_TOTAL={}, KEYS_PER_ROW={} BITMAPS={} COLORS=0 TEXT=0",
+            self.device_id, self.product_name, self.keys_total, self.keys_per_row, self.resolution)
+    }
+}
+
+
 // match command {
 //     Command::Pong => {}
 //     _ => debug!("Received companion command: {:?}", command),
