@@ -1,5 +1,5 @@
 [workspace]
-members = ["rust_satellite","gateway","leaf","bin_comm"]
+members = ["rust_satellite","gateway","leaf","bin_comm","companion_to_device"]
 
 [profile.release]
 strip = true

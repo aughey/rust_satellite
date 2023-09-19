@@ -2,10 +2,11 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 
 use crate::stream_utils::receive_length_prefix;
-use crate::{Result, StreamDeckDevice};
+use crate::Result;
 use async_trait::async_trait;
 use bin_comm::stream_utils::write_struct;
 use bin_comm::{RemoteCommands, DeviceCommands, SetButtonImage};
+use companion_to_device::StreamDeckDevice;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::Mutex;
 

@@ -5,13 +5,13 @@ use clap::Parser;
 use elgato_streamdeck::info::Kind;
 use gateway::{
     satellite::{self, satellite_read_command},
-    ButtonState, Cli, Result, StreamDeckDevice,
+    Cli, Result
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader},
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
     sync::Mutex,
 };
-use tracing::{debug, info, trace};
+use tracing::{debug, info};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -106,7 +106,7 @@ where
     let satellite_device = satellite::SatelliteDevice::new(satellite_write_stream);
 
     let companion_to_satellite = tokio::spawn(async move {
-        companion_to_satellite(companion_read_stream, satellite_device, kind, image_format).await
+        companion_to_device::companion_to_device(companion_read_stream, satellite_device, kind, image_format).await
     });
 
     let companion_ping = tokio::spawn(async move { companion_ping(companion_write_stream).await });
@@ -136,128 +136,64 @@ where
     }
 }
 
-async fn companion_to_satellite<R>(
-    companion_read_stream: R,
-    streamdeck_device: impl StreamDeckDevice + Send + Clone + 'static,
-    kind: Kind,
-    image_format: elgato_streamdeck::info::ImageFormat,
-) -> Result<()>
-where
-    R: AsyncRead + Unpin + Send + 'static,
-{
-    let mut lines = BufReader::new(companion_read_stream).lines();
-
-    info!("Processing commands from companion.");
-
-    // multiple access to write stream
-    while let Some(line) = lines.next_line().await? {
-        trace!("Received line: {}", line);
-        let streamdeck_device = streamdeck_device.clone();
-        // Run the processing of EVERY line asynchronously.  This has the advantage of using
-        // as many cores as possible for image processing.
-        tokio::spawn(async move {
-            if let Err(e) = handle_companion_data(line, streamdeck_device, kind, image_format).await
-            {
-                tracing::error!("Error: {:?}", e);
-            }
-        });
+pub struct ButtonState {
+    buttons: Vec<bool>,
+}
+impl ButtonState {
+    pub fn new(size: usize) -> Self {
+        let mut v = Vec::with_capacity(size);
+        v.resize_with(size, || false);
+        Self { buttons: v }
     }
+    pub async fn update_all(
+        &mut self,
+        states: impl IntoIterator<Item = (usize, bool)>,
+        writer: &mut (impl AsyncWrite + Unpin),
+        device_id: &str,
+    ) -> Result<()> {
+        for (index, state) in states {
+            self.update_button(index, state, writer, device_id).await?;
+        }
+        writer.flush().await?;
+        Ok(())
+    }
+    pub async fn update_button(
+        &mut self,
+        index: usize,
+        pressed: bool,
+        writer: &mut (impl AsyncWrite + Unpin),
+        device_id: &str,
+    ) -> Result<()> {
+        if self.buttons[index] == pressed {
+            Ok(())
+        } else {
+            self.buttons[index] = pressed;
 
-    Ok(())
+            let pressed = if pressed { 1 } else { 0 };
+
+            let msg = format!("KEY-PRESS DEVICEID={device_id} KEY={index} PRESSED={pressed}\n");
+            debug!("Sending: {}", msg);
+            writer.write_all(msg.as_bytes()).await?;
+            Ok(())
+        }
+    }
 }
 
-async fn handle_companion_data(
-    line: String,
-    mut streamdeck_device: impl StreamDeckDevice + Send + 'static,
-    kind: Kind,
-    image_format: elgato_streamdeck::info::ImageFormat,
-) -> Result<()>
-{
-    let command = gateway::Command::parse(&line)
-        .map_err(|e| anyhow::anyhow!("Error parsing line: {}, {:?}", line, e))?;
 
-    match command {
-        gateway::Command::Pong => {}
-        _ => debug!("Received companion command: {:?}", command),
-    }
-
-    match command {
-        gateway::Command::Pong => {}
-        gateway::Command::KeyPress(_) => {}
-        gateway::Command::KeyRotate(_) => {}
-        gateway::Command::Begin(_) => {}
-        gateway::Command::AddDevice(_) => {}
-        gateway::Command::KeyState(keystate) => {
-            let in_button_range = (keystate.key < kind.key_count()).then_some(keystate.key);
-
-            let in_lcd_button = if in_button_range.is_some() {
-                None
-            } else {
-                kind.lcd_strip_size()
-                    .map(|_| kind.key_count() - keystate.key)
-                    .filter(|index| index < &kind.column_count())
-            };
-            // Run this in a separate task because it can be CPU intensive
-            // and we want to allow many image processing tasks to happen in
-            // parallel if it can.
-            match (in_button_range, in_lcd_button) {
-                (Some(key), _) => {
-                    debug!("Writing image to button");
-                    let image = image::DynamicImage::ImageRgb8(
-                        image::ImageBuffer::from_vec(120, 120, keystate.bitmap()?)
-                            .ok_or_else(|| anyhow::anyhow!("Couldn't extract image buffer"))?,
-                    );
-                    let image = image.resize_exact(
-                        image_format.size.0 as u32,
-                        image_format.size.1 as u32,
-                        image::imageops::FilterType::Lanczos3,
-                    );
-                    // Convert the image into the EXACT format needed for the remote device
-                    let image = elgato_streamdeck::images::convert_image(kind, image)?;
-                    // Send this to the satellite
-                    streamdeck_device.set_button_image(key, image).await?;
-                }
-                (None, Some(lcd_key)) => {
-                    debug!("Writing image to LCD panel");
-
-                    let (lcd_width, lcd_height) = kind.lcd_strip_size().unwrap_or((0, 0));
-                    let (lcd_width, lcd_height) = (lcd_width as u32, lcd_height as u32);
-
-                    let image = image::DynamicImage::ImageRgb8(
-                        image::ImageBuffer::from_vec(120, 120, keystate.bitmap()?).unwrap(),
-                    );
-                    // resize image to the height
-                    let image = image.resize(
-                        lcd_height,
-                        lcd_height,
-                        image::imageops::FilterType::Gaussian,
-                    );
-                    let button_x_offset = (lcd_key as u32 - 8) * ((lcd_width - image.width()) / 3);
-
-                    // Convert the image into the EXACT format needed for the remote device
-                    let image = elgato_streamdeck::images::convert_image(kind, image)?;
-                    streamdeck_device
-                        .set_lcd_image(
-                            button_x_offset.try_into()?,
-                            lcd_height.try_into()?,
-                            lcd_height.try_into()?,
-                            image,
-                        )
-                        .await?;
-                }
-                _ => {
-                    debug!("Key out of range {:?}", keystate);
-                }
-            }
-        }
-        gateway::Command::Brightness(brightness) => {
-            streamdeck_device.set_brightness(brightness.brightness).await?;
-        }
-        gateway::Command::Unknown(_) => todo!(),
-    }
-
-    Ok(())
+#[derive(Debug, PartialEq, Eq)]
+pub struct DeviceMsg {
+    pub device_id: String,
+    pub product_name: String,
+    pub keys_total: u8,
+    pub keys_per_row: u8,
 }
+impl DeviceMsg {
+    pub fn device_msg(&self) -> String {
+        format!("DEVICEID={} PRODUCT_NAME=\"{}\" KEYS_TOTAL={}, KEYS_PER_ROW={} BITMAPS=120 COLORS=0 TEXT=0",
+            self.device_id, self.product_name, self.keys_total, self.keys_per_row)
+    }
+}
+
 
 async fn satellite_to_companion<R, W>(
     mut satellite_read_stream: R,
@@ -282,7 +218,7 @@ where
             .write_all(
                 format!(
                     "ADD-DEVICE {}\n",
-                    gateway::DeviceMsg {
+                    DeviceMsg {
                         device_id: device_id.clone(),
                         product_name: format!("RustSatellite StreamDeck: {}", device_name(&kind)),
                         keys_total: kind.key_count(),
@@ -340,6 +276,7 @@ where
         }
     }
 }
+
 
 fn device_name(kind: &Kind) -> &'static str {
     match kind {
