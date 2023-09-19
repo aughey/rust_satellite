@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
 }
 
 async fn handle_connection<R, W>(
-    mut satellite_read_stream: R,
+    satellite_read_stream: R,
     satellite_write_stream: W,
     companion_read_stream: R,
     companion_write_stream: W,
