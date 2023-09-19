@@ -32,6 +32,7 @@ impl KeyState {
 pub struct StreamDeck {
     keystate: KeyState,
     device: AsyncStreamDeck,
+    first: bool
 }
 impl StreamDeck {
     pub fn new(device: AsyncStreamDeck) -> Self {
@@ -45,7 +46,7 @@ impl StreamDeck {
         let keystate = KeyState {
             states: vec![false; keycount as usize],
         };
-        Self { keystate, device }
+        Self { keystate, device, first: true }
     }
 }
 
@@ -66,6 +67,14 @@ impl traits::device::Controller for StreamDeck {
 #[async_trait]
 impl traits::device::Receiver for StreamDeck {
     async fn receive(&mut self) -> Result<traits::device::Command> {
+        // the first message must be the config.
+        if self.first {
+            self.first = false;
+            return Ok(traits::device::Command::Config(traits::device::RemoteConfig {
+                pid: self.device.kind().product_id(),
+                device_id: "ZZZZ".to_string(),
+            }));
+        }
         loop {
             let buttons = self.device.read_input(60.0).await?;
             debug!("Got usb command {:?}", buttons);
