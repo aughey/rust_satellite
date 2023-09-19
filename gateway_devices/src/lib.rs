@@ -1,9 +1,37 @@
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::{ToSocketAddrs, TcpStream},
+};
 use traits::{
     async_trait,
     device::{DeviceCommands, SetBrightness, SetButtonImage, SetLCDImage},
     Result,
 };
+
+pub async fn connect(
+    addr: impl ToSocketAddrs,
+) -> Result<(
+    impl traits::companion::Sender,
+    impl traits::companion::Receiver,
+)> {
+    let (companion_reader, companion_writer) =
+        tokio::net::TcpStream::connect(addr).await?.into_split();
+
+    let companion_receiver = GatewayCompanionReceiver::new(companion_reader);
+    let companion_sender = GatewayCompanionSender::new(companion_writer);
+    Ok((companion_sender, companion_receiver))
+}
+
+pub async fn connect_device_to_socket(socket: TcpStream) -> Result<(
+    impl traits::device::Sender,
+    impl traits::device::Receiver,
+)> {
+    let (companion_reader, companion_writer) = socket.into_split();
+
+    let sender = GatewayDeviceController::new(companion_writer);
+    let receiver = GatewayDeviceReceiver::new(companion_reader);
+    Ok((sender,receiver))
+}
 
 pub struct GatewayCompanionReceiver<R> {
     reader: R,
@@ -68,10 +96,18 @@ where
     W: AsyncWrite + Unpin + Send,
 {
     async fn button_change(&mut self, change: traits::device::ButtonChange) -> Result<()> {
-        send_companion_command(&mut self.writer, traits::device::Command::ButtonChange(change)).await
+        send_companion_command(
+            &mut self.writer,
+            traits::device::Command::ButtonChange(change),
+        )
+        .await
     }
     async fn encoder_twist(&mut self, twist: traits::device::EncoderTwist) -> Result<()> {
-        send_companion_command(&mut self.writer, traits::device::Command::EncoderTwist(twist)).await
+        send_companion_command(
+            &mut self.writer,
+            traits::device::Command::EncoderTwist(twist),
+        )
+        .await
     }
 }
 
@@ -88,7 +124,7 @@ where
 }
 
 #[async_trait]
-impl<W> traits::device::Controller for GatewayDeviceController<W>
+impl<W> traits::device::Sender for GatewayDeviceController<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
@@ -113,10 +149,7 @@ where
     Ok(bin_comm::stream_utils::write_struct(satellite_write_stream, &command).await?)
 }
 
-async fn send_companion_command<W>(
-    stream: &mut W,
-    command: traits::device::Command)
-    -> Result<()>
+async fn send_companion_command<W>(stream: &mut W, command: traits::device::Command) -> Result<()>
 where
     W: AsyncWrite + Unpin,
 {

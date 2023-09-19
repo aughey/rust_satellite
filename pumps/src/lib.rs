@@ -1,7 +1,30 @@
+use std::future::Future;
+
 use traits::Result;
 
+pub async fn run_satellite<DS, DR, CS, CR, CD, CC, CDF, CCF>(
+    create_device: CD,
+    create_companion: CC,
+) -> traits::Result<()>
+where
+    CD: Fn() -> CDF,
+    CDF: Future<Output = Result<(DS, DR)>>,
+    CC: Fn() -> CCF,
+    CCF: Future<Output = Result<(CS, CR)>>,
+    DS: traits::device::Sender + Send + 'static,
+    DR: traits::device::Receiver + Send + 'static,
+    CS: traits::companion::Sender + Send + 'static,
+    CR: traits::companion::Receiver + Send + 'static,
+{
+    let devices = create_device().await?;
+    let companions = create_companion().await?;
+
+    message_pump(devices.0, devices.1, companions.0, companions.1).await
+}
+
+
 pub async fn message_pump(
-    device_controller: impl traits::device::Controller,
+    device_controller: impl traits::device::Sender,
     device_receiver: impl traits::device::Receiver,
     companion_sender: impl traits::companion::Sender,
     companion_receiver: impl traits::companion::Receiver,
@@ -38,7 +61,7 @@ async fn handle_device_to_companion(
 
 async fn handle_companion_to_device(
     mut companion_receiver: impl traits::companion::Receiver,
-    mut device_controller: impl traits::device::Controller,
+    mut device_controller: impl traits::device::Sender,
 ) -> Result<()> {
     loop {
         let action = companion_receiver.receive().await?;

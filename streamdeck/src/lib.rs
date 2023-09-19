@@ -1,5 +1,5 @@
 use elgato_streamdeck::AsyncStreamDeck;
-use tracing::debug;
+use tracing::{debug, info};
 use traits::Result;
 use traits::{
     async_trait,
@@ -32,7 +32,7 @@ impl KeyState {
 pub struct StreamDeck {
     keystate: KeyState,
     device: AsyncStreamDeck,
-    first: bool
+    first: bool,
 }
 impl StreamDeck {
     pub fn new(device: AsyncStreamDeck) -> Self {
@@ -46,12 +46,46 @@ impl StreamDeck {
         let keystate = KeyState {
             states: vec![false; keycount as usize],
         };
-        Self { keystate, device, first: true }
+        Self {
+            keystate,
+            device,
+            first: true,
+        }
+    }
+
+    pub async fn open() -> Result<(impl traits::device::Sender, impl traits::device::Receiver)> {
+        // Create instance of HidApi
+        let hid = elgato_streamdeck::new_hidapi().unwrap();
+
+        // List devices and unsafely take first one
+        let (kind, serial) = elgato_streamdeck::list_devices(&hid).remove(0);
+        let image_format = kind.key_image_format();
+        info!("Found kind {:?} with image format {:?}", kind, image_format);
+
+        // Connect to the device
+        let device =
+            elgato_streamdeck::asynchronous::AsyncStreamDeck::connect(&hid, kind, &serial)?;
+
+        // Print out some info from the device
+        info!(
+            "Connected to '{}' with version '{}'",
+            device.serial_number().await?,
+            device.firmware_version().await?
+        );
+
+        device.reset().await?;
+
+        // Set device brightness
+        device.set_brightness(35).await?;
+
+        let device_sender = Self::new(device.clone());
+        let device_receiver = device_sender.clone();
+        Ok((device_sender, device_receiver))
     }
 }
 
 #[async_trait]
-impl traits::device::Controller for StreamDeck {
+impl traits::device::Sender for StreamDeck {
     async fn set_brightness(&mut self, brightness: SetBrightness) -> Result<()> {
         Ok(self.device.set_brightness(brightness.brightness).await?)
     }
@@ -70,10 +104,12 @@ impl traits::device::Receiver for StreamDeck {
         // the first message must be the config.
         if self.first {
             self.first = false;
-            return Ok(traits::device::Command::Config(traits::device::RemoteConfig {
-                pid: self.device.kind().product_id(),
-                device_id: "ZZZZ".to_string(),
-            }));
+            return Ok(traits::device::Command::Config(
+                traits::device::RemoteConfig {
+                    pid: self.device.kind().product_id(),
+                    device_id: "ZZZZ".to_string(),
+                },
+            ));
         }
         loop {
             let buttons = self.device.read_input(60.0).await?;

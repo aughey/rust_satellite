@@ -16,4 +16,5 @@ streamdeck = { version = "0.1.0", path = "../streamdeck" }
 tokio = { version = "1.32.0", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
+traits = { version = "0.1.0", path = "../traits" }
 

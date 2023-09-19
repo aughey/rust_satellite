@@ -9,7 +9,7 @@ pub trait Receiver {
 }
 
 #[async_trait]
-pub trait Controller {
+pub trait Sender {
     async fn set_brightness(&mut self, brightness: SetBrightness) -> Result<()>;
     async fn set_button_image(&mut self, image: SetButtonImage) -> Result<()>;
     async fn set_lcd_image(&mut self, image: SetLCDImage) -> Result<()>;
