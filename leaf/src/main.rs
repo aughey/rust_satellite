@@ -1,12 +1,12 @@
-use std::sync::Arc;
+
 
 use anyhow::Result;
 use clap::Parser;
-use elgato_streamdeck::{images::ImageRect, AsyncStreamDeck};
-use gateway_devices::{GatewayDeviceController, GatewayDeviceReceiver, GatewayCompanionSender, GatewayCompanionReceiver};
+
+use gateway_devices::{GatewayCompanionSender, GatewayCompanionReceiver};
 use leaf::Cli;
-use tokio::io::{AsyncRead, AsyncWrite};
-use tracing::{debug, info};
+
+use tracing::{info};
 
 #[tokio::main]
 async fn main() -> Result<()> {
