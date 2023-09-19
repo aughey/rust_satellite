@@ -1,10 +1,11 @@
 use std::{ops::DerefMut, sync::Arc};
 
-use bin_comm::{DeviceCommands, RemoteCommands, SetButtonImage, SetLCDImage};
+use bin_comm::RemoteCommands;
 use clap::Parser;
 use elgato_streamdeck::info::Kind;
 use gateway::{
-    satellite::satellite_read_command, stream_utils::write_struct, ButtonState, Cli, Result,
+    satellite::{self, satellite_read_command},
+    ButtonState, Cli, Result, StreamDeckDevice,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader},
@@ -102,14 +103,10 @@ where
         })
     };
 
+    let satellite_device = satellite::SatelliteDevice::new(satellite_write_stream);
+
     let companion_to_satellite = tokio::spawn(async move {
-        companion_to_satellite(
-            companion_read_stream,
-            satellite_write_stream,
-            kind,
-            image_format,
-        )
-        .await
+        companion_to_satellite(companion_read_stream, satellite_device, kind, image_format).await
     });
 
     let companion_ping = tokio::spawn(async move { companion_ping(companion_write_stream).await });
@@ -139,31 +136,29 @@ where
     }
 }
 
-async fn companion_to_satellite<R, W>(
+async fn companion_to_satellite<R>(
     companion_read_stream: R,
-    satellite_write_stream: W,
+    streamdeck_device: impl StreamDeckDevice + Send + Clone + 'static,
     kind: Kind,
     image_format: elgato_streamdeck::info::ImageFormat,
 ) -> Result<()>
 where
     R: AsyncRead + Unpin + Send + 'static,
-    W: AsyncWrite + Unpin + Send + 'static,
 {
     let mut lines = BufReader::new(companion_read_stream).lines();
 
     info!("Processing commands from companion.");
 
     // multiple access to write stream
-    let satellite_write_stream = Arc::new(Mutex::new(satellite_write_stream));
-
     while let Some(line) = lines.next_line().await? {
         trace!("Received line: {}", line);
-        let satellite_write_stream = satellite_write_stream.clone();
+        let streamdeck_device = streamdeck_device.clone();
         // Run the processing of EVERY line asynchronously.  This has the advantage of using
         // as many cores as possible for image processing.
         tokio::spawn(async move {
-            if let Err(e) = handle_companion_data(line, satellite_write_stream, kind, image_format).await {
-                tracing::error!("Error: {:?}",e);
+            if let Err(e) = handle_companion_data(line, streamdeck_device, kind, image_format).await
+            {
+                tracing::error!("Error: {:?}", e);
             }
         });
     }
@@ -171,14 +166,12 @@ where
     Ok(())
 }
 
-async fn handle_companion_data<W>(
+async fn handle_companion_data(
     line: String,
-    satellite_write_stream: Arc<Mutex<W>>,
+    mut streamdeck_device: impl StreamDeckDevice + Send + 'static,
     kind: Kind,
     image_format: elgato_streamdeck::info::ImageFormat,
 ) -> Result<()>
-where
-    W: AsyncWrite + Unpin,
 {
     let command = gateway::Command::parse(&line)
         .map_err(|e| anyhow::anyhow!("Error parsing line: {}, {:?}", line, e))?;
@@ -222,9 +215,7 @@ where
                     // Convert the image into the EXACT format needed for the remote device
                     let image = elgato_streamdeck::images::convert_image(kind, image)?;
                     // Send this to the satellite
-                    let image = DeviceCommands::SetButtonImage(SetButtonImage { key, image });
-                    let mut writer = satellite_write_stream.lock().await;
-                    write_struct(writer.deref_mut(), &image).await?;
+                    streamdeck_device.set_button_image(key, image).await?;
                 }
                 (None, Some(lcd_key)) => {
                     debug!("Writing image to LCD panel");
@@ -245,15 +236,14 @@ where
 
                     // Convert the image into the EXACT format needed for the remote device
                     let image = elgato_streamdeck::images::convert_image(kind, image)?;
-                    let image = DeviceCommands::SetLCDImage(SetLCDImage {
-                        x_offset: button_x_offset as u16,
-                        x_size: lcd_height as u16,
-                        y_size: lcd_height as u16,
-                        image,
-                    });
-                    // Send this to the satellite
-                    let mut writer = satellite_write_stream.lock().await;
-                    send_satellite_command(writer.deref_mut(), &image).await?;
+                    streamdeck_device
+                        .set_lcd_image(
+                            button_x_offset.try_into()?,
+                            lcd_height.try_into()?,
+                            lcd_height.try_into()?,
+                            image,
+                        )
+                        .await?;
                 }
                 _ => {
                     debug!("Key out of range {:?}", keystate);
@@ -261,29 +251,12 @@ where
             }
         }
         gateway::Command::Brightness(brightness) => {
-            let mut writer = satellite_write_stream.lock().await;
-            send_satellite_command(
-                writer.deref_mut(),
-                &DeviceCommands::SetBrightness(bin_comm::SetBrightness {
-                    brightness: brightness.brightness,
-                }),
-            )
-            .await?
+            streamdeck_device.set_brightness(brightness.brightness).await?;
         }
         gateway::Command::Unknown(_) => todo!(),
     }
 
     Ok(())
-}
-
-async fn send_satellite_command<W>(
-    satellite_write_stream: &mut W,
-    command: &DeviceCommands,
-) -> std::io::Result<()>
-where
-    W: AsyncWrite + Unpin,
-{
-    write_struct(satellite_write_stream, command).await
 }
 
 async fn satellite_to_companion<R, W>(

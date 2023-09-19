@@ -40,7 +40,7 @@ pub struct EncoderTwist {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SetButtonImage {
-    pub key: u8,
+    pub button: u8,
     pub image: Vec<u8>
 }
 

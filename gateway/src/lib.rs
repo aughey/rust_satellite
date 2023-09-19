@@ -1,4 +1,5 @@
 pub use anyhow::Result;
+use async_trait::async_trait;
 use clap::Parser;
 use keyvalue::StringOrStr;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
@@ -6,6 +7,19 @@ use tracing::debug;
 pub mod keyvalue;
 pub use bin_comm::stream_utils;
 pub mod satellite;
+
+#[async_trait]
+pub trait StreamDeckDevice {
+    async fn set_brightness(&mut self, brightness: u8) -> Result<()>;
+    async fn set_button_image(&mut self, button: u8, image: Vec<u8>) -> Result<()>;
+    async fn set_lcd_image(
+        &mut self,
+        x_offset: u16,
+        x_size: u16,
+        y_size: u16,
+        image: Vec<u8>,
+    ) -> Result<()>;
+}
 
 #[derive(Parser)]
 pub struct Cli {
@@ -17,8 +31,7 @@ pub struct Cli {
     pub listen_port: u16,
     #[arg(long)]
     #[clap(default_value = "0.0.0.0")]
-    pub listen_address: String
-
+    pub listen_address: String,
 }
 
 pub struct ButtonState {

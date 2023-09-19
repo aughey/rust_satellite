@@ -73,7 +73,7 @@ async fn gateway_to_device(
                 .await?;
         match command {
             bin_comm::DeviceCommands::SetButtonImage(image) => {
-                device.write_image(image.key, &image.image).await?;
+                device.write_image(image.button, &image.image).await?;
             }
             bin_comm::DeviceCommands::SetLCDImage(image) => {
                 let lcd_image = Arc::new(ImageRect::from_device_image(
