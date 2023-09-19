@@ -58,7 +58,7 @@ impl StringOrStr<'_> {
 /// care if the string value inside whatever enum
 /// it is are the same
 /// ```
-/// # use rust_satellite::keyvalue::StringOrStr;
+/// # use common::StringOrStr;
 /// assert_eq!(StringOrStr::Str("John"), StringOrStr::String("John".to_string()));
 /// ```
 impl PartialEq for StringOrStr<'_> {

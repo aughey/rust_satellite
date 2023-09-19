@@ -1,12 +1,8 @@
-
-
 use anyhow::Result;
 use clap::Parser;
-
-use gateway_devices::{GatewayCompanionSender, GatewayCompanionReceiver};
+use gateway_devices::{GatewayCompanionReceiver, GatewayCompanionSender};
 use leaf::Cli;
-
-use tracing::{info};
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {

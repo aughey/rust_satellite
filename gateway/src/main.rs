@@ -1,13 +1,8 @@
-use std::sync::Arc;
-
 use clap::Parser;
 use elgato_streamdeck::info::Kind;
 use gateway::{Cli, Result};
-use gateway_devices::{GatewayDeviceReceiver, GatewayDeviceController};
-use tokio::{
-    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
-    sync::Mutex,
-};
+use gateway_devices::{GatewayDeviceController, GatewayDeviceReceiver};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tracing::{debug, info};
 use traits::device::Receiver;
 
@@ -91,17 +86,11 @@ where
     let companion_sender =
         companion::sender::Sender::new(companion_write_stream, config.device_id.to_string());
 
-    pumps::message_pump(device_sender, device_receiver, companion_sender, companion_receiver).await
-}
-
-async fn companion_ping<W>(companion_write_stream: Arc<Mutex<W>>) -> Result<()>
-where
-    W: AsyncWrite + Unpin + Send + 'static,
-{
-    loop {
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-        let mut companion_write_stream = companion_write_stream.lock().await;
-        companion_write_stream.write_all(b"PING\n").await.unwrap();
-        companion_write_stream.flush().await.unwrap();
-    }
+    pumps::message_pump(
+        device_sender,
+        device_receiver,
+        companion_sender,
+        companion_receiver,
+    )
+    .await
 }
