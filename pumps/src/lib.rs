@@ -14,7 +14,7 @@ pub async fn message_pump(
 
     match res {
         Ok(_) => Ok(()),
-        Err(e) => Err(e.into()),
+        Err(e) => Err(e),
     }
 }
 
