@@ -5,7 +5,7 @@ use rust_satellite::{Cli, Result};
 
 
 
-use tracing::{info};
+use tracing::info;
 use traits::device::Receiver;
 
 #[tokio::main]
