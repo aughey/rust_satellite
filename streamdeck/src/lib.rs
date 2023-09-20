@@ -1,6 +1,17 @@
+//! # streamdeck
+//!
+//! A crate that implements the traits device::Sender and device::Receiver for the Elgato StreamDeck.
+//!
+//! This adapts the underlying elgato_streamdeck crate to the traits defined in rust_satellite
+
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![warn(missing_docs)]
+
+use elgato_streamdeck::info::Kind;
 use elgato_streamdeck::AsyncStreamDeck;
 use tracing::{debug, info, trace};
 use traits::Result;
+use traits::anyhow;
 use traits::{
     async_trait,
     device::{SetBrightness, SetButtonImage, SetLCDImage},
@@ -28,6 +39,11 @@ impl KeyState {
     }
 }
 
+/// StreamDeck implements the device::Sender and device::Receiver traits for the Elgato StreamDeck.
+///
+/// A single StreamDeck implements both the sender and receiver traits and can be cloned to
+/// create multiple instances of the same device.  The device is shared properly in the underlying
+/// elgato_streamdeck::AsyncStreamDeck implementation.
 #[derive(Clone)]
 pub struct StreamDeck {
     keystate: KeyState,
@@ -35,17 +51,21 @@ pub struct StreamDeck {
     first: bool,
 }
 impl StreamDeck {
+    /// Get the kind of device this is.
     pub fn kind(&self) -> elgato_streamdeck::info::Kind {
         self.device.kind()
     }
+    /// Create a new StreamDeck from the provided AsyncStreamDeck.
     pub fn new(device: AsyncStreamDeck) -> Self {
         let kind = device.kind();
+        // Our key layout is the hardware keys, followed by virtual LCD keys, followed by encoders.
         let keycount = kind.key_count()
             + if kind.lcd_strip_size().is_some() {
                 kind.column_count()
             } else {
                 0
-            };
+            }
+            + kind.encoder_count();
         let keystate = KeyState {
             states: vec![false; keycount as usize],
         };
@@ -56,12 +76,23 @@ impl StreamDeck {
         }
     }
 
-    pub async fn open() -> Result<(StreamDeck, StreamDeck)> {
+    /// Opens the first StreamDeck found.
+    pub async fn open_first() -> Result<(StreamDeck, StreamDeck)> {
+        Self::open(|_| true).await
+    }
+
+    /// Constructor to create a new StreamDeck according to the predicate
+    /// provided.
+    pub async fn open(mut filter: impl FnMut(&Kind) -> bool) -> Result<(StreamDeck, StreamDeck)> {
         // Create instance of HidApi
         let hid = elgato_streamdeck::new_hidapi().unwrap();
 
         // List devices and unsafely take first one
-        let (kind, serial) = elgato_streamdeck::list_devices(&hid).remove(0);
+        let (kind, serial) = elgato_streamdeck::list_devices(&hid)
+            .into_iter()
+            .find(|(kind,_)| filter(kind))
+            .ok_or_else(|| anyhow::anyhow!("No matching devices found"))?;
+
         let image_format = kind.key_image_format();
         info!("Found kind {:?} with image format {:?}", kind, image_format);
 

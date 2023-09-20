@@ -6,7 +6,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tracing::{debug, trace};
 use traits::{
     anyhow, async_trait,
-    device::{DeviceCommands, SetBrightness, SetButtonImage, SetLCDImage},
+    device::{DeviceActions, SetBrightness, SetButtonImage, SetLCDImage},
     Result,
 };
 
@@ -15,7 +15,7 @@ trait CommandProcessor {
         &mut self,
         kind: Kind,
         command: Command,
-    ) -> Result<Option<traits::device::DeviceCommands>>;
+    ) -> Result<Option<traits::device::DeviceActions>>;
 }
 
 #[derive(Default)]
@@ -25,7 +25,7 @@ impl CommandProcessor for DefaultCommandProcessor {
         &mut self,
         kind: Kind,
         command: Command,
-    ) -> Result<Option<traits::device::DeviceCommands>> {
+    ) -> Result<Option<traits::device::DeviceActions>> {
         let ret = match command {
             Command::KeyPress(data) => {
                 debug!("Received key press: {data}");
@@ -89,7 +89,7 @@ impl CommandProcessor for DefaultCommandProcessor {
                         let image = elgato_streamdeck::images::convert_image(kind, image)?;
 
                         let ret =
-                            DeviceCommands::SetButtonImage(SetButtonImage { button: key, image });
+                            DeviceActions::SetButtonImage(SetButtonImage { button: key, image });
 
                         Some(ret)
                     }
@@ -108,7 +108,7 @@ impl CommandProcessor for DefaultCommandProcessor {
                         let button_x_offset =
                             (lcd_key as u32 - 8) * ((lcd_width - image.width()) / 3);
 
-                        Some(DeviceCommands::SetLCDImage(SetLCDImage {
+                        Some(DeviceActions::SetLCDImage(SetLCDImage {
                             x_offset: button_x_offset.try_into()?,
                             x_size: lcd_height.try_into()?,
                             y_size: lcd_height.try_into()?,
@@ -123,7 +123,7 @@ impl CommandProcessor for DefaultCommandProcessor {
             }
             Command::Brightness(brightness) => {
                 debug!("Received brightness: {:?}", brightness);
-                Some(DeviceCommands::SetBrightness(SetBrightness {
+                Some(DeviceActions::SetBrightness(SetBrightness {
                     brightness: brightness.brightness,
                 }))
             }
@@ -141,7 +141,7 @@ pub struct Receiver<R> {
     reader: BufReader<R>,
     kind: Kind,
     processor: DefaultCommandProcessor,
-    cache: lru::LruCache<String, traits::device::DeviceCommands>,
+    cache: lru::LruCache<String, traits::device::DeviceActions>,
 }
 impl<R> Receiver<R>
 where
@@ -161,7 +161,7 @@ impl<R> traits::companion::Receiver for Receiver<R>
 where
     R: AsyncRead + Unpin + Send,
 {
-    async fn receive(&mut self) -> Result<traits::device::DeviceCommands> {
+    async fn receive(&mut self) -> Result<traits::device::DeviceActions> {
         // read a line from the stream
         loop {
             let mut line = String::new();

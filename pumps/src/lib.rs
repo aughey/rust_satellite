@@ -1,9 +1,29 @@
+//! # pumps
+//! 
+//! This crate provides message pump functions to asynchronously move data between
+//! senders and receivers.
+//! 
+//! Once the connections to the underlying device and the companion app are established,
+//! the primary function of all applications is to asynchronously wait for messages from
+//! one side and pass them to the other side.  This generically implements that functionality
+//! to be used across all applications.
+
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![warn(missing_docs)]
+
 use std::future::Future;
 
 use tracing::trace;
 use traits::Result;
 
-pub async fn run_satellite<DS, DR, CS, CR, CD, CC, CDF, CCF>(
+/// Create devices and connect them together with a message pump.
+/// In the common case, this can create an entire application in
+/// a single call with provided factory functions.
+/// 
+/// create_device is a factory function that creates the device sender and receiver.
+/// 
+/// create_companion is a factory function that creates the companion sender and receiver.
+pub async fn create_and_run<DS, DR, CS, CR, CD, CC, CDF, CCF>(
     create_device: CD,
     create_companion: CC,
 ) -> traits::Result<()>
@@ -23,6 +43,14 @@ where
     message_pump(devices.0, devices.1, companions.0, companions.1).await
 }
 
+/// message_pump takes all four sender and receiver traits and asynchronously
+/// moves data between them.  This is the core of all applications.
+/// 
+/// Internally, this will create two independent asynchronous operations that
+/// move data between the device to the companion, and the companion to the device.
+/// 
+/// This function will return when either of the two operations returns an error or
+/// if they both succeed (using tokio::tryjoin!).
 pub async fn message_pump(
     device_sender: impl traits::device::Sender,
     device_receiver: impl traits::device::Receiver,
@@ -41,6 +69,11 @@ pub async fn message_pump(
     }
 }
 
+/// handle_device_to_companion takes a device receiver and a companion sender
+/// and asynchronously moves data between them.  A complete match statement
+/// is provided to handle all possible device commands and any new commands
+/// added to the device trait will be a compile time error until the match
+/// statement is updated.
 async fn handle_device_to_companion(
     mut device_receiver: impl traits::device::Receiver,
     mut companion_sender: impl traits::companion::Sender,
@@ -60,6 +93,11 @@ async fn handle_device_to_companion(
     }
 }
 
+/// handle_companion_to_device takes a companion receiver and a device sender
+/// and asynchronously moves data between them.  A complete match statement
+/// is provided to handle all possible companion commands and any new commands
+/// added to the companion trait will be a compile time error until the match
+/// statement is updated.
 async fn handle_companion_to_device(
     mut companion_receiver: impl traits::companion::Receiver,
     mut device_sender: impl traits::device::Sender,
@@ -68,13 +106,13 @@ async fn handle_companion_to_device(
         let action = companion_receiver.receive().await?;
         trace!("handle_device_to_companion: {:?}", action);
         match action {
-            traits::device::DeviceCommands::SetButtonImage(image) => {
+            traits::device::DeviceActions::SetButtonImage(image) => {
                 device_sender.set_button_image(image).await?
             }
-            traits::device::DeviceCommands::SetLCDImage(image) => {
+            traits::device::DeviceActions::SetLCDImage(image) => {
                 device_sender.set_lcd_image(image).await?
             }
-            traits::device::DeviceCommands::SetBrightness(brightness) => {
+            traits::device::DeviceActions::SetBrightness(brightness) => {
                 device_sender.set_brightness(brightness).await?
             }
         }

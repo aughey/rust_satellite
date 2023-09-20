@@ -16,7 +16,7 @@ use tokio::{
 use tracing::trace;
 use traits::{
     async_trait,
-    device::{DeviceCommands, SetBrightness, SetButtonImage, SetLCDImage},
+    device::{DeviceActions, SetBrightness, SetButtonImage, SetLCDImage},
     Result,
 };
 
@@ -69,8 +69,8 @@ where
     R: AsyncRead + Unpin + Send,
 {
     /// Receive a command from the reader and return it to the caller.
-    async fn receive(&mut self) -> Result<DeviceCommands> {
-        let command: DeviceCommands = bin_comm::stream_utils::read_struct(&mut self.reader).await?;
+    async fn receive(&mut self) -> Result<DeviceActions> {
+        let command: DeviceActions = bin_comm::stream_utils::read_struct(&mut self.reader).await?;
         trace!("GatewayCompanionReceiver::Receiver: {:?}", command);
         Ok(command)
     }
@@ -190,21 +190,21 @@ where
     async fn set_brightness(&mut self, brightness: SetBrightness) -> Result<()> {
         GatewayDeviceSender::send_device_command(
             &mut self.writer,
-            DeviceCommands::SetBrightness(brightness),
+            DeviceActions::SetBrightness(brightness),
         )
         .await
     }
     async fn set_button_image(&mut self, image: SetButtonImage) -> Result<()> {
         GatewayDeviceSender::send_device_command(
             &mut self.writer,
-            DeviceCommands::SetButtonImage(image),
+            DeviceActions::SetButtonImage(image),
         )
         .await
     }
     async fn set_lcd_image(&mut self, image: SetLCDImage) -> Result<()> {
         GatewayDeviceSender::send_device_command(
             &mut self.writer,
-            DeviceCommands::SetLCDImage(image),
+            DeviceActions::SetLCDImage(image),
         )
         .await
     }
@@ -216,7 +216,7 @@ where
 {
     async fn send_device_command(
         satellite_write_stream: &mut W,
-        command: DeviceCommands,
+        command: DeviceActions,
     ) -> Result<()>
     where
         W: AsyncWrite + Unpin,

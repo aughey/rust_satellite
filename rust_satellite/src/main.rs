@@ -12,16 +12,16 @@ async fn main() -> Result<()> {
 
     info!("Starting native satellite application");
 
-    let mut streamdeck = streamdeck::StreamDeck::open().await?;
+    let mut streamdeck = streamdeck::StreamDeck::open_first().await?;
     let first_msg = streamdeck.0.receive().await?.as_config()?;
 
-    pumps::run_satellite(
+    pumps::create_and_run(
         move || {
             let streamdeck = streamdeck.clone();
             async move { Ok(streamdeck) }
         },
         move |_| {
-            let hostport = (args.host.clone(), args.port);
+            let hostport = (args.companion_host.clone(), args.companion_port);
             let first_msg = first_msg.clone();
             async {
                 info!("Connecting to companion: {}:{}", hostport.0, hostport.1);
