@@ -35,7 +35,7 @@ where
                     "ADD-DEVICE {}\n",
                     crate::DeviceMsg {
                         device_id: config.device_id.clone(),
-                        product_name: "RustSatellite StreamDeck: ZZZZ".to_string(),
+                        product_name: format!("RustSatellite StreamDeck: {}",kind.to_string()),
                         keys_total: kind.key_count(),
                         keys_per_row: kind.column_count(),
                         resolution: kind.key_image_format().size.0.try_into()?,
@@ -62,6 +62,9 @@ impl<T> Drop for Sender<T> {
         self.ping.abort();
     }
 }
+
+
+
 
 async fn companion_ping<W>(companion_write_stream: Arc<Mutex<W>>) -> Result<()>
 where

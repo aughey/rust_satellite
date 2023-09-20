@@ -113,7 +113,7 @@ impl traits::device::Receiver for StreamDeck {
             return Ok(traits::device::Command::Config(
                 traits::device::RemoteConfig {
                     pid: self.device.kind().product_id(),
-                    device_id: "ZZZZ".to_string(),
+                    device_id: self.device.serial_number().await?,
                 },
             ));
         }
