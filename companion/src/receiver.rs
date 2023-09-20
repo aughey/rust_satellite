@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use crate::Command;
 use elgato_streamdeck::info::Kind;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
@@ -16,14 +18,10 @@ trait CommandProcessor {
     ) -> Result<Option<traits::device::DeviceCommands>>;
 }
 
-struct DefaultCommandProcessor {
-    cache: lru::LruCache<String, traits::device::DeviceCommands>,
-}
+struct DefaultCommandProcessor {}
 impl Default for DefaultCommandProcessor {
     fn default() -> Self {
-        Self {
-            cache: lru::LruCache::new(std::num::NonZeroUsize::new(200).unwrap()),
-        }
+        Self {}
     }
 }
 impl CommandProcessor for DefaultCommandProcessor {
@@ -32,27 +30,28 @@ impl CommandProcessor for DefaultCommandProcessor {
         kind: Kind,
         command: Command,
     ) -> Result<Option<traits::device::DeviceCommands>> {
-        match command {
+        let ret = match command {
             Command::KeyPress(data) => {
                 debug!("Received key press: {data}");
+                None
             }
             Command::KeyRotate(data) => {
                 debug!("Received key rotate: {data}");
+                None
             }
             Command::Pong => {
                 //trace!("Received PONG");
+                None
             }
             Command::Begin(versions) => {
                 debug!("Beginning communication: {:?}", versions);
+                None
             }
             Command::AddDevice(device) => {
                 debug!("Adding device: {:?}", device);
+                None
             }
             Command::KeyState(keystate) => {
-                if let Some(cache) = self.cache.get(keystate.bitmap_base64.as_ref()) {
-                    return Ok(Some(cache.clone()));
-                }
-
                 debug!("Received key state: {:?}", keystate);
                 debug!("  bitmap size: {}", keystate.bitmap()?.len());
 
@@ -93,14 +92,10 @@ impl CommandProcessor for DefaultCommandProcessor {
 
                         let image = elgato_streamdeck::images::convert_image(kind, image)?;
 
-                        let ret = DeviceCommands::SetButtonImage(SetButtonImage {
-                            button: key,
-                            image,
-                        });
+                        let ret =
+                            DeviceCommands::SetButtonImage(SetButtonImage { button: key, image });
 
-                        self.cache.put(keystate.bitmap_base64.as_ref().to_string(), ret.clone());
-
-                        return Ok(Some(ret));
+                        Some(ret)
                     }
                     (None, Some(lcd_key)) => {
                         debug!("Writing image to LCD panel");
@@ -117,29 +112,32 @@ impl CommandProcessor for DefaultCommandProcessor {
                         let button_x_offset =
                             (lcd_key as u32 - 8) * ((lcd_width - image.width()) / 3);
 
-                        return Ok(Some(DeviceCommands::SetLCDImage(SetLCDImage {
+                        Some(DeviceCommands::SetLCDImage(SetLCDImage {
                             x_offset: button_x_offset.try_into()?,
                             x_size: lcd_height.try_into()?,
                             y_size: lcd_height.try_into()?,
                             image: image.into_bytes(),
-                        })));
+                        }))
                     }
                     _ => {
                         debug!("Key out of range {:?}", keystate);
+                        None
                     }
                 }
             }
             Command::Brightness(brightness) => {
                 debug!("Received brightness: {:?}", brightness);
-                return Ok(Some(DeviceCommands::SetBrightness(SetBrightness {
+                Some(DeviceCommands::SetBrightness(SetBrightness {
                     brightness: brightness.brightness,
-                })));
+                }))
             }
             Command::Unknown(command) => {
                 debug!("Unknown command: {}", command);
+                None
             }
-        }
-        Ok(None)
+        };
+
+        Ok(ret)
     }
 }
 
@@ -147,6 +145,7 @@ pub struct Receiver<R> {
     reader: BufReader<R>,
     kind: Kind,
     processor: DefaultCommandProcessor,
+    cache: lru::LruCache<String, traits::device::DeviceCommands>
 }
 impl<R> Receiver<R>
 where
@@ -157,6 +156,7 @@ where
             reader: tokio::io::BufReader::new(reader),
             kind,
             processor: Default::default(),
+            cache: lru::LruCache::new(NonZeroUsize::new(100).unwrap()),
         }
     }
 }
@@ -170,10 +170,16 @@ where
         loop {
             let mut line = String::new();
             self.reader.read_line(&mut line).await?;
+
+            if let Some(command) = self.cache.get(&line) {
+                return Ok(command.clone());
+            } 
+
             let command = Command::parse(&line)?;
 
             let processor = &mut self.processor;
             if let Some(commands) = processor.process(self.kind, command)? {
+                self.cache.put(line, commands.clone());
                 return Ok(commands);
             }
         }

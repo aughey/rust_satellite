@@ -9,6 +9,11 @@ pub enum StringOrStr<'a> {
     String(String),
     Str(&'a str),
 }
+impl std::hash::Hash for StringOrStr<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state)
+    }
+}
 /// Convert from a string reference
 impl<'a> From<&'a str> for StringOrStr<'a> {
     fn from(s: &'a str) -> Self {

@@ -23,7 +23,7 @@ pub async fn connect(
 }
 
 /// Commands that can be sent to the device
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Command<'a> {
     Pong,
     KeyPress(&'a str),
@@ -126,7 +126,7 @@ impl Command<'_> {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Hash,Eq)]
 pub struct KeyState<'a> {
     pub device: StringOrStr<'a>,
     pub key: u8,
@@ -155,19 +155,19 @@ impl std::fmt::Debug for KeyState<'_> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Hash, Eq)]
 pub struct Brightness<'a> {
     pub device: StringOrStr<'a>,
     pub brightness: u8,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq,Hash, Eq)]
 pub struct AddDevice<'a> {
     pub success: bool,
     pub device_id: StringOrStr<'a>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Versions<'a> {
     pub companion_version: StringOrStr<'a>,
     pub api_version: StringOrStr<'a>,
