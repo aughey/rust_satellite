@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
         );
 
         let (device_sender, mut device_receiver) =
-            gateway_devices::connect_device_to_socket(stream).await?;
+            gateway_devices::device_from_socket(stream).await?;
 
         // Read the first message from the satellite to get the config
         let config_msg = device_receiver.receive().await?.as_config()?;
@@ -31,11 +31,11 @@ async fn main() -> Result<()> {
 
         info!(
             "Connecting to companion app: {}:{}",
-            args.host.as_str(),
-            args.port
+            args.companion_host.as_str(),
+            args.companion_port
         );
         let (companion_reader, companion_writer) =
-            tokio::net::TcpStream::connect((args.host.as_str(), args.port))
+            tokio::net::TcpStream::connect((args.companion_host.as_str(), args.companion_port))
                 .await?
                 .into_split();
 
@@ -58,58 +58,3 @@ async fn main() -> Result<()> {
         });
     }
 }
-
-// async fn handle_connection<R, W>(
-//     satellite_read_stream: R,
-//     satellite_write_stream: W,
-//     companion_read_stream: R,
-//     companion_write_stream: W,
-// ) -> Result<()>
-// where
-//     R: AsyncRead + Unpin + Send + 'static,
-//     W: AsyncWrite + Unpin + Send + 'static,
-// {
-//     // Handshaking.  Wait for a message from the satellite telling us what it is
-//     let mut device_receiver = GatewayDeviceReceiver::new(satellite_read_stream);
-//     let device_sender = GatewayDeviceController::new(satellite_write_stream);
-
-//     // Read the first message from the satellite to get the config
-//     let config = device_receiver.receive().await?;
-//     debug!("Received config: {:?}", config);
-//     let config = match config {
-//         traits::device::Command::Config(config) => config,
-//         #[allow(unreachable_patterns)]
-//         _ => {
-//             anyhow::bail!("Expected config, got {:?}", config);
-//         }
-//     };
-
-//     // Get our kind from the config
-//     let kind =
-//         Kind::from_pid(config.pid).ok_or_else(|| anyhow::anyhow!("Unknown pid {}", config.pid))?;
-
-//     let image_format = kind.key_image_format();
-//     info!(
-//         "Gateway for streamdeck {:?} with image format {:?}",
-//         kind, image_format
-//     );
-
-//     let companion_receiver = companion::receiver::Receiver::new(companion_read_stream, kind);
-//     let companion_sender = companion::sender::Sender::new(
-//         companion_write_stream,
-//         config.device_id.to_string(),
-//         "zzzz",
-//         kind.key_count().into(),
-//         kind.column_count().into(),
-//         kind.key_image_format().size.0.try_into()?,
-//     )
-//     .await?;
-
-//     pumps::message_pump(
-//         device_sender,
-//         device_receiver,
-//         companion_sender,
-//         companion_receiver,
-//     )
-//     .await
-// }

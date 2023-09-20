@@ -10,10 +10,10 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
 
     pumps::run_satellite(streamdeck::StreamDeck::open, move |_| {
-        let hostport = (args.host.clone(), args.port);
+        let hostport = (args.gateway_host.clone(), args.gateway_port);
         async {
             info!("Connecting to gateway: {}:{}", hostport.0, hostport.1);
-            let (leaf_sender, leaf_receiver) = gateway_devices::connect(hostport).await?;
+            let (leaf_sender, leaf_receiver) = gateway_devices::connect_to_gateway(hostport).await?;
             info!("Connected to gateway");
             Ok((leaf_sender, leaf_receiver))
         }

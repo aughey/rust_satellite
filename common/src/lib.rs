@@ -1,3 +1,8 @@
+//! Common utilities that are shared across crates.
+
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![warn(missing_docs)]
+
 use std::str::FromStr;
 
 /// A string that can be either a String or a &str
@@ -6,7 +11,9 @@ use std::str::FromStr;
 /// to allocate anything, but if we need to, we can.
 #[derive(Debug, Clone)]
 pub enum StringOrStr<'a> {
+    /// A string that owns its data
     String(String),
+    /// A string reference
     Str(&'a str),
 }
 impl std::hash::Hash for StringOrStr<'_> {
@@ -42,10 +49,14 @@ impl StringOrStr<'_> {
         self.as_ref().len()
     }
 
+    /// Is the internal string empty
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Get the internal string as a string reference.
+    /// This is the same as as_ref(), but uses the as_str
+    /// convention from the standard library.
     pub fn as_str(&self) -> &str {
         self.as_ref()
     }

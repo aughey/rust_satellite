@@ -4,7 +4,7 @@ use tokio::{
     io::{AsyncWrite, AsyncWriteExt},
     sync::Mutex,
 };
-use tracing::{debug, info};
+use tracing::debug;
 use traits::anyhow;
 use traits::Result;
 use traits::{async_trait, device::EncoderTwist};
@@ -24,8 +24,8 @@ where
             .ok_or_else(|| anyhow::anyhow!("Unknown pid {}", config.pid))?;
 
         let image_format = kind.key_image_format();
-        info!(
-            "Gateway for streamdeck {:?} with image format {:?}",
+        debug!(
+            "Creating Companion sender for streamdeck {:?} with image format {:?}",
             kind, image_format
         );
 

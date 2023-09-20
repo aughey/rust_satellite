@@ -1,6 +1,7 @@
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
+/// Read a message from the stream, prefixed with a u32 length.
 pub async fn receive_length_prefix(
     stream: &mut (impl AsyncRead + Unpin),
     mut buf: Vec<u8>,
@@ -17,6 +18,8 @@ pub async fn receive_length_prefix(
     Ok(buf)
 }
 
+/// Serialize a serde value using bincode and write it to a stream
+/// using a length prefix.
 pub async fn write_struct(
     stream: &mut (impl AsyncWrite + Unpin),
     data: &impl serde::Serialize,
@@ -25,6 +28,7 @@ pub async fn write_struct(
     write_length_prefix(stream, buf).await
 }
 
+/// Write a message to the stream, prefixed with a u32 length.
 pub async fn write_length_prefix(
     stream: &mut (impl AsyncWrite + Unpin),
     buf: impl AsRef<[u8]>,
@@ -41,6 +45,8 @@ pub async fn write_length_prefix(
     Ok(())
 }
 
+/// Read a struct from a stream that is prefixed with a u32 length deserialized
+/// using bincode and serde.
 pub async fn read_struct<T>(stream: &mut (impl AsyncRead + Unpin)) -> anyhow::Result<T>
 where
     T: serde::de::DeserializeOwned,

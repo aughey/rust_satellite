@@ -1,3 +1,14 @@
+//! # Gateway Devices
+//! These are structs that implement the traits defined in the `traits` crate
+//! that forward commands to a device over a TCP connection.  The gateway
+//! is intended to ship properly formatted bits down to a leaf device in a 
+//! binary format specifically formatted for that device.  This eliminates
+//! the need for the leaf device to do ascii parsing, image scaling, and image
+//! conversion.
+
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![warn(missing_docs)]
+
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{TcpStream, ToSocketAddrs},
@@ -9,7 +20,9 @@ use traits::{
     Result,
 };
 
-pub async fn connect(
+/// Create a connection to the gateway and return objects implementing
+/// the companion sender and receiver traits.
+pub async fn connect_to_gateway(
     addr: impl ToSocketAddrs,
 ) -> Result<(
     impl traits::companion::Sender,
@@ -23,16 +36,20 @@ pub async fn connect(
     Ok((companion_sender, companion_receiver))
 }
 
-pub async fn connect_device_to_socket(
+/// Create a set of devices objects from an already connected socket.
+pub async fn device_from_socket(
     socket: TcpStream,
 ) -> Result<(impl traits::device::Sender, impl traits::device::Receiver)> {
     let (companion_reader, companion_writer) = socket.into_split();
 
-    let sender = GatewayDeviceController::new(companion_writer);
+    let sender = GatewayDeviceSender::new(companion_writer);
     let receiver = GatewayDeviceReceiver::new(companion_reader);
     Ok((sender, receiver))
 }
 
+/// GatewayCompanionReceiver implements the companion receiver trait.  The
+/// The operations are received from the provided reader, deserialized,
+/// and provided to the caller in the receive method.
 pub struct GatewayCompanionReceiver<R> {
     reader: R,
 }
@@ -40,15 +57,18 @@ impl<R> GatewayCompanionReceiver<R>
 where
     R: AsyncRead + Unpin + Send,
 {
+    /// Create a new GatewayCompanionReceiver from the provided reader.
     pub fn new(reader: R) -> Self {
         Self { reader }
     }
 }
+
 #[async_trait]
 impl<R> traits::companion::Receiver for GatewayCompanionReceiver<R>
 where
     R: AsyncRead + Unpin + Send,
 {
+    /// Receive a command from the reader and return it to the caller.
     async fn receive(&mut self) -> Result<DeviceCommands> {
         let command: DeviceCommands = bin_comm::stream_utils::read_struct(&mut self.reader).await?;
         trace!("GatewayCompanionReceiver::Receiver: {:?}", command);
@@ -56,6 +76,9 @@ where
     }
 }
 
+/// GatewayDeviceReceiver implements the device receiver trait.  The
+/// operations are received from the provided reader, deserialized,
+/// and provided to the caller in the receive method.
 pub struct GatewayDeviceReceiver<R> {
     reader: R,
 }
@@ -63,15 +86,18 @@ impl<R> GatewayDeviceReceiver<R>
 where
     R: AsyncRead + Unpin + Send,
 {
+    /// Create a new GatewayDeviceReceiver from the provided reader.
     pub fn new(reader: R) -> Self {
         Self { reader }
     }
 }
+
 #[async_trait]
 impl<R> traits::device::Receiver for GatewayDeviceReceiver<R>
 where
     R: AsyncRead + Unpin + Send,
 {
+    /// read the command from the provided reader and return it to the caller.
     async fn receive(&mut self) -> Result<traits::device::Command> {
         let command: traits::device::Command =
             bin_comm::stream_utils::read_struct(&mut self.reader).await?;
@@ -80,6 +106,9 @@ where
     }
 }
 
+/// GatewayCompanionSender implements the companion sender trait.  Methods
+/// called on the companion sender are serialized and sent to the provided
+/// writer.
 pub struct GatewayCompanionSender<W> {
     writer: W,
 }
@@ -87,6 +116,7 @@ impl<W> GatewayCompanionSender<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
+    /// Create a new GatewayCompanionSender from the provided writer.
     pub fn new(writer: W) -> Self {
         Self { writer }
     }
@@ -119,6 +149,7 @@ where
         .await
     }
 }
+
 impl<W> GatewayCompanionSender<W>
 where
     W: AsyncWrite + Unpin + Send,
@@ -128,53 +159,58 @@ where
         W: AsyncWrite + Unpin,
     {
         trace!(
-            "GatewayDeviceController::send_companion_command: {:?}",
+            "GatewayDeviceSender::send_companion_command: {:?}",
             command
         );
         Ok(bin_comm::stream_utils::write_struct(stream, &command).await?)
     }
 }
 
-pub struct GatewayDeviceController<W> {
+/// GatewayDeviceSender implements the device sender trait.  Methods
+/// called on the device sender are serialized and sent to the provided
+/// writer.
+pub struct GatewayDeviceSender<W> {
     writer: W,
 }
-impl<W> GatewayDeviceController<W>
+impl<W> GatewayDeviceSender<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
+    /// Create a new GatewayDeviceSender from the provided writer.
     pub fn new(writer: W) -> Self {
         Self { writer }
     }
 }
 
 #[async_trait]
-impl<W> traits::device::Sender for GatewayDeviceController<W>
+impl<W> traits::device::Sender for GatewayDeviceSender<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
     async fn set_brightness(&mut self, brightness: SetBrightness) -> Result<()> {
-        GatewayDeviceController::send_device_command(
+        GatewayDeviceSender::send_device_command(
             &mut self.writer,
             DeviceCommands::SetBrightness(brightness),
         )
         .await
     }
     async fn set_button_image(&mut self, image: SetButtonImage) -> Result<()> {
-        GatewayDeviceController::send_device_command(
+        GatewayDeviceSender::send_device_command(
             &mut self.writer,
             DeviceCommands::SetButtonImage(image),
         )
         .await
     }
     async fn set_lcd_image(&mut self, image: SetLCDImage) -> Result<()> {
-        GatewayDeviceController::send_device_command(
+        GatewayDeviceSender::send_device_command(
             &mut self.writer,
             DeviceCommands::SetLCDImage(image),
         )
         .await
     }
 }
-impl<W> GatewayDeviceController<W>
+
+impl<W> GatewayDeviceSender<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
@@ -186,7 +222,7 @@ where
         W: AsyncWrite + Unpin,
     {
         trace!(
-            "GatewayDeviceController::send_device_command: {:?}",
+            "GatewayDeviceSender::send_device_command: {:?}",
             command
         );
         Ok(bin_comm::stream_utils::write_struct(satellite_write_stream, &command).await?)
