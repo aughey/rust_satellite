@@ -46,7 +46,7 @@ impl Command {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct SetLCDImage {
     pub x_offset: u16,
     pub x_size: u16,
@@ -55,19 +55,19 @@ pub struct SetLCDImage {
     pub image: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct SetBrightness {
     pub brightness: u8,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Clone,Deserialize, Debug)]
 pub struct SetButtonImage {
     pub button: u8,
     /// image is an image formatted for the device
     pub image: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize,Clone, Deserialize, Debug)]
 pub enum DeviceCommands {
     SetButtonImage(SetButtonImage),
     SetLCDImage(SetLCDImage),
