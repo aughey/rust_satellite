@@ -4,9 +4,10 @@ use tokio::{
     io::{AsyncWrite, AsyncWriteExt},
     sync::Mutex,
 };
-use tracing::debug;
+use tracing::{debug, info};
 use traits::Result;
 use traits::{async_trait, device::EncoderTwist};
+use traits::anyhow;
 
 pub struct Sender<W> {
     device_id: String,
@@ -19,22 +20,28 @@ where
 {
     pub async fn new(
         mut writer: W,
-        device_id: String,
-        product_name: &str,
-        keys_total: usize,
-        keys_per_row: usize,
-        resolution: u16
+        config: traits::device::RemoteConfig,
     ) -> Result<Self> {
+        // Get our kind from the config
+        let kind = elgato_streamdeck::info::Kind::from_pid(config.pid)
+            .ok_or_else(|| anyhow::anyhow!("Unknown pid {}", config.pid))?;
+
+        let image_format = kind.key_image_format();
+        info!(
+            "Gateway for streamdeck {:?} with image format {:?}",
+            kind, image_format
+        );
+
         writer
             .write_all(
                 format!(
                     "ADD-DEVICE {}\n",
                     crate::DeviceMsg {
-                        device_id: device_id.clone(),
-                        product_name: format!("RustSatellite StreamDeck: {product_name}",),
-                        keys_total: keys_total.try_into()?,
-                        keys_per_row: keys_per_row.try_into()?,
-                        resolution
+                        device_id: config.device_id.clone(),
+                        product_name: format!("RustSatellite StreamDeck: ZZZZ",),
+                        keys_total: kind.key_count().try_into()?,
+                        keys_per_row: kind.column_count().try_into()?,
+                        resolution: kind.key_image_format().size.0.try_into()?,
                     }
                     .device_msg()
                 )
@@ -47,7 +54,7 @@ where
 
         Ok(Self {
             ping,
-            device_id,
+            device_id: config.device_id.clone(),
             writer,
         })
     }
@@ -77,6 +84,9 @@ impl<W> traits::companion::Sender for Sender<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
+    async fn config(&mut self, _config: traits::device::RemoteConfig) -> Result<()> {
+        Ok(())
+    }
     async fn button_change(&mut self, buttons: traits::device::ButtonChange) -> Result<()> {
         let mut writer = self.writer.lock().await;
         for (index, pressed) in buttons.buttons {

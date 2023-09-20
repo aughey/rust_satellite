@@ -26,39 +26,22 @@ async fn main() -> Result<()> {
             gateway_devices::connect_device_to_socket(stream).await?;
 
         // Read the first message from the satellite to get the config
-        let config = device_receiver.receive().await?;
-        debug!("Received config: {:?}", config);
-        let config = match config {
-            traits::device::Command::Config(config) => config,
-            _ => {
-                anyhow::bail!("Expected config, got {:?}", config);
-            }
-        };
-
-        // Get our kind from the config
-        let kind = Kind::from_pid(config.pid)
-            .ok_or_else(|| anyhow::anyhow!("Unknown pid {}", config.pid))?;
-
-        let image_format = kind.key_image_format();
-        info!(
-            "Gateway for streamdeck {:?} with image format {:?}",
-            kind, image_format
-        );
+        let config_msg = device_receiver.receive().await?.as_config()?;
+        debug!("Received config: {:?}",config_msg );
+       
 
         info!("Connecting to companion app: {}:{}", args.host.as_str(), args.port);
         let (companion_reader, companion_writer) =
             tokio::net::TcpStream::connect((args.host.as_str(), args.port))
                 .await?
                 .into_split();
+        
+        let kind = Kind::from_pid(config_msg.pid).ok_or_else(|| anyhow::anyhow!("Unknown pid {}", config_msg.pid))?;
 
         let companion_receiver = companion::receiver::Receiver::new(companion_reader, kind);
         let companion_sender = companion::sender::Sender::new(
             companion_writer,
-            config.device_id.to_string(),
-            "zzzz",
-            kind.key_count().into(),
-            kind.column_count().into(),
-            kind.key_image_format().size.0.try_into()?,
+            config_msg
         )
         .await?;
 

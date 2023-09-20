@@ -1,8 +1,12 @@
+use crate::Command;
 use elgato_streamdeck::info::Kind;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
-use tracing::debug;
-use traits::{anyhow, async_trait, Result, device::{DeviceCommands, SetButtonImage, SetLCDImage, SetBrightness}};
-use crate::Command;
+use tracing::{debug, trace};
+use traits::{
+    anyhow, async_trait,
+    device::{DeviceCommands, SetBrightness, SetButtonImage, SetLCDImage},
+    Result,
+};
 
 pub struct Receiver<R> {
     reader: BufReader<R>,
@@ -15,7 +19,7 @@ where
     pub fn new(reader: R, kind: Kind) -> Self {
         Self {
             reader: tokio::io::BufReader::new(reader),
-            kind
+            kind,
         }
     }
 }
@@ -52,10 +56,9 @@ where
                     debug!("  bitmap size: {}", keystate.bitmap()?.len());
 
                     let kind = &self.kind;
-                    let image_format = kind.key_image_format();
 
                     let (lcd_width, lcd_height) = self.kind.lcd_strip_size().unwrap_or((0, 0));
-                    let (lcd_width, lcd_height) = (lcd_width as u32, lcd_height as u32);            
+                    let (lcd_width, lcd_height) = (lcd_width as u32, lcd_height as u32);
 
                     let in_button_range = (keystate.key < kind.key_count()).then_some(keystate.key);
 
@@ -69,28 +72,38 @@ where
 
                     match (in_button_range, in_lcd_button) {
                         (Some(key), _) => {
-                            debug!("Writing image to button");
+                            trace!("Writing image to button");
+                            let size = self.kind.key_image_format().size.0;
+                            let bitmap = keystate.bitmap()?;
+                            if bitmap.len() != size * size * 3 {
+                                anyhow::bail!(
+                                    "Expected bitmap to be len {}, but was {}",
+                                    size * size * 3,
+                                    bitmap.len()
+                                );
+                            }
                             let image = image::DynamicImage::ImageRgb8(
-                                image::ImageBuffer::from_vec(120, 120, keystate.bitmap()?)
-                                    .ok_or_else(|| {
-                                        anyhow::anyhow!("Couldn't extract image buffer")
-                                    })?,
-                            );
-                            let image = image.resize_exact(
-                                image_format.size.0 as u32,
-                                image_format.size.1 as u32,
-                                image::imageops::FilterType::Gaussian,
+                                image::ImageBuffer::from_vec(
+                                    size.try_into()?,
+                                    size.try_into()?,
+                                    keystate.bitmap()?,
+                                )
+                                .ok_or_else(|| anyhow::anyhow!("Couldn't extract image buffer"))?,
                             );
 
-                            return Ok(DeviceCommands::SetButtonImage(SetButtonImage{
+                            let image = elgato_streamdeck::images::convert_image(self.kind,image)?;
+
+                            return Ok(DeviceCommands::SetButtonImage(SetButtonImage {
                                 button: key,
-                                image: image.into_bytes()
+                                image
                             }));
                         }
                         (None, Some(lcd_key)) => {
                             debug!("Writing image to LCD panel");
+                            let size = self.kind.key_image_format().size.0.try_into()?;
                             let image = image::DynamicImage::ImageRgb8(
-                                image::ImageBuffer::from_vec(120, 120, keystate.bitmap()?).unwrap(),
+                                image::ImageBuffer::from_vec(size, size, keystate.bitmap()?)
+                                    .unwrap(),
                             );
                             // resize image to the height
                             let image = image.resize(
@@ -105,7 +118,7 @@ where
                                 x_offset: button_x_offset.try_into()?,
                                 x_size: lcd_height.try_into()?,
                                 y_size: lcd_height.try_into()?,
-                                image: image.into_bytes()
+                                image: image.into_bytes(),
                             }));
                         }
                         _ => {
@@ -115,11 +128,9 @@ where
                 }
                 Command::Brightness(brightness) => {
                     debug!("Received brightness: {:?}", brightness);
-                    return Ok(
-                        DeviceCommands::SetBrightness(SetBrightness {
-                            brightness: brightness.brightness
-                        })
-                    );
+                    return Ok(DeviceCommands::SetBrightness(SetBrightness {
+                        brightness: brightness.brightness,
+                    }));
                 }
                 Command::Unknown(command) => {
                     debug!("Unknown command: {} with data {}", command, line.len());
@@ -128,4 +139,3 @@ where
         }
     }
 }
-

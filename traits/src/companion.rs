@@ -10,6 +10,7 @@ pub trait Receiver {
 
 #[async_trait]
 pub trait Sender {
+    async fn config(&mut self, config: crate::device::RemoteConfig) -> Result<()>;
     async fn button_change(&mut self, change: crate::device::ButtonChange) -> Result<()>;
     async fn encoder_twist(&mut self, twist: crate::device::EncoderTwist) -> Result<()>;
 }

@@ -9,7 +9,7 @@ async fn main() -> Result<()> {
 
     let args = Cli::parse();
 
-    pumps::run_satellite(streamdeck::StreamDeck::open, move || {
+    pumps::run_satellite(streamdeck::StreamDeck::open, move |_| {
         let hostport = (args.host.clone(), args.port);
         async {
             info!("Connecting to gateway: {}:{}", hostport.0, hostport.1);

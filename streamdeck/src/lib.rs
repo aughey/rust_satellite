@@ -1,5 +1,5 @@
 use elgato_streamdeck::AsyncStreamDeck;
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 use traits::Result;
 use traits::{
     async_trait,
@@ -35,6 +35,9 @@ pub struct StreamDeck {
     first: bool,
 }
 impl StreamDeck {
+    pub fn kind(&self) -> elgato_streamdeck::info::Kind {
+        self.device.kind()
+    }
     pub fn new(device: AsyncStreamDeck) -> Self {
         let kind = device.kind();
         let keycount = kind.key_count()
@@ -53,7 +56,7 @@ impl StreamDeck {
         }
     }
 
-    pub async fn open() -> Result<(impl traits::device::Sender, impl traits::device::Receiver)> {
+    pub async fn open() -> Result<(StreamDeck,StreamDeck)> {
         // Create instance of HidApi
         let hid = elgato_streamdeck::new_hidapi().unwrap();
 
@@ -90,6 +93,7 @@ impl traits::device::Sender for StreamDeck {
         Ok(self.device.set_brightness(brightness.brightness).await?)
     }
     async fn set_button_image(&mut self, image: SetButtonImage) -> Result<()> {
+        debug!("set_button_image: {:?}", image);
         Ok(self.device.write_image(image.button, &image.image).await?)
     }
     async fn set_lcd_image(&mut self, _image: SetLCDImage) -> Result<()> {
@@ -102,7 +106,9 @@ impl traits::device::Sender for StreamDeck {
 impl traits::device::Receiver for StreamDeck {
     async fn receive(&mut self) -> Result<traits::device::Command> {
         // the first message must be the config.
+        trace!("receive");
         if self.first {
+            trace!("First read");
             self.first = false;
             return Ok(traits::device::Command::Config(
                 traits::device::RemoteConfig {
@@ -113,7 +119,6 @@ impl traits::device::Receiver for StreamDeck {
         }
         loop {
             let buttons = self.device.read_input(60.0).await?;
-            debug!("Got usb command {:?}", buttons);
             match buttons {
                 elgato_streamdeck::StreamDeckInput::NoData => {}
                 elgato_streamdeck::StreamDeckInput::ButtonStateChange(buttons) => {

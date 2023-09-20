@@ -1,5 +1,6 @@
 use std::future::Future;
 
+use tracing::trace;
 use traits::Result;
 
 pub async fn run_satellite<DS, DR, CS, CR, CD, CC, CDF, CCF>(
@@ -9,15 +10,15 @@ pub async fn run_satellite<DS, DR, CS, CR, CD, CC, CDF, CCF>(
 where
     CD: Fn() -> CDF,
     CDF: Future<Output = Result<(DS, DR)>>,
-    CC: Fn() -> CCF,
+    CC: Fn((&mut DS,&mut DR)) -> CCF,
     CCF: Future<Output = Result<(CS, CR)>>,
     DS: traits::device::Sender + Send + 'static,
     DR: traits::device::Receiver + Send + 'static,
     CS: traits::companion::Sender + Send + 'static,
     CR: traits::companion::Receiver + Send + 'static,
 {
-    let devices = create_device().await?;
-    let companions = create_companion().await?;
+    let mut devices = create_device().await?;
+    let companions = create_companion((&mut devices.0,&mut devices.1)).await?;
 
     message_pump(devices.0, devices.1, companions.0, companions.1).await
 }
@@ -47,8 +48,11 @@ async fn handle_device_to_companion(
 ) -> Result<()> {
     loop {
         let action = device_receiver.receive().await?;
+        trace!("handle_device_to_companion: {:?}", action);
         match action {
-            traits::device::Command::Config(_) => {}
+            traits::device::Command::Config(c) => {
+                companion_sender.config(c).await?
+            }
             traits::device::Command::ButtonChange(change) => {
                 companion_sender.button_change(change).await?
             }
@@ -65,6 +69,7 @@ async fn handle_companion_to_device(
 ) -> Result<()> {
     loop {
         let action = companion_receiver.receive().await?;
+        trace!("handle_device_to_companion: {:?}", action);
         match action {
             traits::device::DeviceCommands::SetButtonImage(image) => {
                 device_controller.set_button_image(image).await?

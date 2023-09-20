@@ -15,7 +15,7 @@ pub trait Sender {
     async fn set_lcd_image(&mut self, image: SetLCDImage) -> Result<()>;
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RemoteConfig {
     pub pid: u16,
     pub device_id: String,
@@ -23,12 +23,12 @@ pub struct RemoteConfig {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ButtonChange {
-    pub buttons: Vec<(u8,bool)>,
+    pub buttons: Vec<(u8, bool)>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct EncoderTwist {
-    pub encoders: Vec<(u8,i8)>,
+    pub encoders: Vec<(u8, i8)>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -36,6 +36,14 @@ pub enum Command {
     Config(RemoteConfig),
     ButtonChange(ButtonChange),
     EncoderTwist(EncoderTwist),
+}
+impl Command {
+    pub fn as_config(self) -> Result<RemoteConfig> {
+        match self {
+            Command::Config(c) => Ok(c),
+            _ => anyhow::bail!("Not a config"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

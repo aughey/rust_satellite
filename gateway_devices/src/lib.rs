@@ -1,7 +1,8 @@
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    net::{ToSocketAddrs, TcpStream},
+    net::{TcpStream, ToSocketAddrs},
 };
+use tracing::trace;
 use traits::{
     async_trait,
     device::{DeviceCommands, SetBrightness, SetButtonImage, SetLCDImage},
@@ -22,15 +23,14 @@ pub async fn connect(
     Ok((companion_sender, companion_receiver))
 }
 
-pub async fn connect_device_to_socket(socket: TcpStream) -> Result<(
-    impl traits::device::Sender,
-    impl traits::device::Receiver,
-)> {
+pub async fn connect_device_to_socket(
+    socket: TcpStream,
+) -> Result<(impl traits::device::Sender, impl traits::device::Receiver)> {
     let (companion_reader, companion_writer) = socket.into_split();
 
     let sender = GatewayDeviceController::new(companion_writer);
     let receiver = GatewayDeviceReceiver::new(companion_reader);
-    Ok((sender,receiver))
+    Ok((sender, receiver))
 }
 
 pub struct GatewayCompanionReceiver<R> {
@@ -51,6 +51,7 @@ where
 {
     async fn receive(&mut self) -> Result<DeviceCommands> {
         let command: DeviceCommands = bin_comm::stream_utils::read_struct(&mut self.reader).await?;
+        trace!("GatewayCompanionReceiver::Receiver: {:?}", command);
         Ok(command)
     }
 }
@@ -74,6 +75,7 @@ where
     async fn receive(&mut self) -> Result<traits::device::Command> {
         let command: traits::device::Command =
             bin_comm::stream_utils::read_struct(&mut self.reader).await?;
+        trace!("GatewayDeviceReceiver::Receiver: {:?}", command);
         Ok(command)
     }
 }
@@ -95,19 +97,41 @@ impl<W> traits::companion::Sender for GatewayCompanionSender<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
+    async fn config(&mut self, config: traits::device::RemoteConfig) -> Result<()> {
+        GatewayCompanionSender::send_companion_command(
+            &mut self.writer,
+            traits::device::Command::Config(config),
+        )
+        .await
+    }
     async fn button_change(&mut self, change: traits::device::ButtonChange) -> Result<()> {
-        send_companion_command(
+        GatewayCompanionSender::send_companion_command(
             &mut self.writer,
             traits::device::Command::ButtonChange(change),
         )
         .await
     }
     async fn encoder_twist(&mut self, twist: traits::device::EncoderTwist) -> Result<()> {
-        send_companion_command(
+        GatewayCompanionSender::send_companion_command(
             &mut self.writer,
             traits::device::Command::EncoderTwist(twist),
         )
         .await
+    }
+}
+impl<W> GatewayCompanionSender<W>
+where
+    W: AsyncWrite + Unpin + Send,
+{
+    async fn send_companion_command(
+        stream: &mut W,
+        command: traits::device::Command,
+    ) -> Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        trace!("GatewayDeviceController::send_companion_command: {:?}", command);
+        Ok(bin_comm::stream_utils::write_struct(stream, &command).await?)
     }
 }
 
@@ -129,29 +153,30 @@ where
     W: AsyncWrite + Unpin + Send,
 {
     async fn set_brightness(&mut self, brightness: SetBrightness) -> Result<()> {
-        send_device_command(&mut self.writer, DeviceCommands::SetBrightness(brightness)).await
+        GatewayDeviceController::send_device_command(&mut self.writer, DeviceCommands::SetBrightness(brightness)).await
     }
     async fn set_button_image(&mut self, image: SetButtonImage) -> Result<()> {
-        send_device_command(&mut self.writer, DeviceCommands::SetButtonImage(image)).await
+        GatewayDeviceController::send_device_command(&mut self.writer, DeviceCommands::SetButtonImage(image)).await
     }
     async fn set_lcd_image(&mut self, image: SetLCDImage) -> Result<()> {
-        send_device_command(&mut self.writer, DeviceCommands::SetLCDImage(image)).await
+        GatewayDeviceController::send_device_command(&mut self.writer, DeviceCommands::SetLCDImage(image)).await
+    }
+}
+impl<W> GatewayDeviceController<W>
+where
+    W: AsyncWrite + Unpin + Send,
+{
+
+    async fn send_device_command(
+        satellite_write_stream: &mut W,
+        command: DeviceCommands,
+    ) -> Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        trace!("GatewayDeviceController::send_device_command: {:?}", command);
+        Ok(bin_comm::stream_utils::write_struct(satellite_write_stream, &command).await?)
     }
 }
 
-async fn send_device_command<W>(
-    satellite_write_stream: &mut W,
-    command: DeviceCommands,
-) -> Result<()>
-where
-    W: AsyncWrite + Unpin,
-{
-    Ok(bin_comm::stream_utils::write_struct(satellite_write_stream, &command).await?)
-}
 
-async fn send_companion_command<W>(stream: &mut W, command: traits::device::Command) -> Result<()>
-where
-    W: AsyncWrite + Unpin,
-{
-    Ok(bin_comm::stream_utils::write_struct(stream, &command).await?)
-}

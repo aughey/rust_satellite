@@ -1,9 +1,26 @@
 use common::StringOrStr;
+use tokio::net::ToSocketAddrs;
 use traits::{anyhow, Result};
 mod keyvalue;
 pub mod receiver;
 pub mod sender;
 
+pub async fn connect(
+    addr: impl ToSocketAddrs,
+    config: traits::device::RemoteConfig,
+) -> Result<(
+    impl traits::companion::Sender,
+    impl traits::companion::Receiver,
+)> {
+    let (companion_reader, companion_writer) =
+        tokio::net::TcpStream::connect(addr).await?.into_split();
+
+    let kind = elgato_streamdeck::info::Kind::from_pid(config.pid)
+        .ok_or_else(|| anyhow::anyhow!("Unknown pid {}", config.pid))?;
+    let companion_receiver = receiver::Receiver::new(companion_reader, kind);
+    let companion_sender = sender::Sender::new(companion_writer, config).await?;
+    Ok((companion_sender, companion_receiver))
+}
 
 /// Commands that can be sent to the device
 #[derive(Debug, PartialEq, Eq)]
@@ -170,7 +187,6 @@ impl DeviceMsg {
             self.device_id, self.product_name, self.keys_total, self.keys_per_row, self.resolution)
     }
 }
-
 
 // match command {
 //     Command::Pong => {}
