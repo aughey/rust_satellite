@@ -6,10 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.75"
-bin_comm = { version = "0.1.0", path = "../bin_comm" }
 clap = { version = "4.4.4", features = ["derive"] }
-elgato-streamdeck = { version = "0.4.1", path = "../elgato-streamdeck", features = ["async"] }
 gateway_devices = { version = "0.1.0", path = "../gateway_devices" }
 pumps = { version = "0.1.0", path = "../pumps" }
 streamdeck = { version = "0.1.0", path = "../streamdeck" }

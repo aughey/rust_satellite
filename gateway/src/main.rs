@@ -3,6 +3,7 @@ use elgato_streamdeck::info::Kind;
 use gateway::{Cli, Result};
 use tracing::{debug, info};
 use traits::device::Receiver;
+use traits::anyhow;
 
 #[tokio::main]
 async fn main() -> Result<()> {

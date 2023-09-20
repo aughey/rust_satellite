@@ -15,9 +15,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 
-pub use anyhow::Result;
-
-pub use bin_comm::stream_utils;
+pub use traits::Result;
 use clap::Parser;
 
 /// The command line arguments for the gateway

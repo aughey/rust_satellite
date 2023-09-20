@@ -8,7 +8,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 
-pub use anyhow::Result;
+pub use traits::Result;
 use clap::Parser;
 
 /// Command line argument for the satellite program

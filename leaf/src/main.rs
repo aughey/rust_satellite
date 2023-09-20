@@ -1,4 +1,4 @@
-use anyhow::Result;
+use leaf::Result;
 use clap::Parser;
 use leaf::Cli;
 use tracing::info;
