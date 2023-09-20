@@ -13,8 +13,7 @@ async fn main() -> Result<()> {
         let hostport = (args.host.clone(), args.port);
         async {
             info!("Connecting to gateway: {}:{}", hostport.0, hostport.1);
-            let (leaf_sender, leaf_receiver) =
-                gateway_devices::connect(hostport).await?;
+            let (leaf_sender, leaf_receiver) = gateway_devices::connect(hostport).await?;
             info!("Connected to gateway");
             Ok((leaf_sender, leaf_receiver))
         }
@@ -23,4 +22,3 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-

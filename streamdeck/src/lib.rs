@@ -56,7 +56,7 @@ impl StreamDeck {
         }
     }
 
-    pub async fn open() -> Result<(StreamDeck,StreamDeck)> {
+    pub async fn open() -> Result<(StreamDeck, StreamDeck)> {
         // Create instance of HidApi
         let hid = elgato_streamdeck::new_hidapi().unwrap();
 

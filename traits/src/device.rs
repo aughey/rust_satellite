@@ -60,14 +60,14 @@ pub struct SetBrightness {
     pub brightness: u8,
 }
 
-#[derive(Serialize, Clone,Deserialize, Debug)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct SetButtonImage {
     pub button: u8,
     /// image is an image formatted for the device
     pub image: Vec<u8>,
 }
 
-#[derive(Serialize,Clone, Deserialize, Debug)]
+#[derive(Serialize, Clone, Deserialize, Debug)]
 pub enum DeviceCommands {
     SetButtonImage(SetButtonImage),
     SetLCDImage(SetLCDImage),

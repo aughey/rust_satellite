@@ -5,9 +5,9 @@ use tokio::{
     sync::Mutex,
 };
 use tracing::{debug, info};
+use traits::anyhow;
 use traits::Result;
 use traits::{async_trait, device::EncoderTwist};
-use traits::anyhow;
 
 pub struct Sender<W> {
     device_id: String,
@@ -18,10 +18,7 @@ impl<W> Sender<W>
 where
     W: AsyncWrite + Unpin + Send + 'static,
 {
-    pub async fn new(
-        mut writer: W,
-        config: traits::device::RemoteConfig,
-    ) -> Result<Self> {
+    pub async fn new(mut writer: W, config: traits::device::RemoteConfig) -> Result<Self> {
         // Get our kind from the config
         let kind = elgato_streamdeck::info::Kind::from_pid(config.pid)
             .ok_or_else(|| anyhow::anyhow!("Unknown pid {}", config.pid))?;
@@ -38,9 +35,9 @@ where
                     "ADD-DEVICE {}\n",
                     crate::DeviceMsg {
                         device_id: config.device_id.clone(),
-                        product_name: format!("RustSatellite StreamDeck: ZZZZ",),
-                        keys_total: kind.key_count().try_into()?,
-                        keys_per_row: kind.column_count().try_into()?,
+                        product_name: "RustSatellite StreamDeck: ZZZZ".to_string(),
+                        keys_total: kind.key_count(),
+                        keys_per_row: kind.column_count(),
                         resolution: kind.key_image_format().size.0.try_into()?,
                     }
                     .device_msg()

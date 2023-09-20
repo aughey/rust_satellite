@@ -123,14 +123,14 @@ impl<W> GatewayCompanionSender<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
-    async fn send_companion_command(
-        stream: &mut W,
-        command: traits::device::Command,
-    ) -> Result<()>
+    async fn send_companion_command(stream: &mut W, command: traits::device::Command) -> Result<()>
     where
         W: AsyncWrite + Unpin,
     {
-        trace!("GatewayDeviceController::send_companion_command: {:?}", command);
+        trace!(
+            "GatewayDeviceController::send_companion_command: {:?}",
+            command
+        );
         Ok(bin_comm::stream_utils::write_struct(stream, &command).await?)
     }
 }
@@ -153,20 +153,31 @@ where
     W: AsyncWrite + Unpin + Send,
 {
     async fn set_brightness(&mut self, brightness: SetBrightness) -> Result<()> {
-        GatewayDeviceController::send_device_command(&mut self.writer, DeviceCommands::SetBrightness(brightness)).await
+        GatewayDeviceController::send_device_command(
+            &mut self.writer,
+            DeviceCommands::SetBrightness(brightness),
+        )
+        .await
     }
     async fn set_button_image(&mut self, image: SetButtonImage) -> Result<()> {
-        GatewayDeviceController::send_device_command(&mut self.writer, DeviceCommands::SetButtonImage(image)).await
+        GatewayDeviceController::send_device_command(
+            &mut self.writer,
+            DeviceCommands::SetButtonImage(image),
+        )
+        .await
     }
     async fn set_lcd_image(&mut self, image: SetLCDImage) -> Result<()> {
-        GatewayDeviceController::send_device_command(&mut self.writer, DeviceCommands::SetLCDImage(image)).await
+        GatewayDeviceController::send_device_command(
+            &mut self.writer,
+            DeviceCommands::SetLCDImage(image),
+        )
+        .await
     }
 }
 impl<W> GatewayDeviceController<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
-
     async fn send_device_command(
         satellite_write_stream: &mut W,
         command: DeviceCommands,
@@ -174,9 +185,10 @@ where
     where
         W: AsyncWrite + Unpin,
     {
-        trace!("GatewayDeviceController::send_device_command: {:?}", command);
+        trace!(
+            "GatewayDeviceController::send_device_command: {:?}",
+            command
+        );
         Ok(bin_comm::stream_utils::write_struct(satellite_write_stream, &command).await?)
     }
 }
-
-

@@ -113,7 +113,7 @@ fn str_to_key_value(data: &str) -> IResult<&str, ParseMap> {
 
         // parse value, a quoted string or a non-quoted string.
         // Check if the next character is a quote, if so, parse a quoted string.
-        let (data,value) = match data.chars().next() {
+        let (data, value) = match data.chars().next() {
             Some('"') => quoted_string(data),
             _ => unquoted_string(data),
         }?;
@@ -252,7 +252,8 @@ mod tests {
     #[test]
     fn test_keyvalue_backslash_value() {
         const DATA: &str = "key=\"value\\\"\"";
-        let mut key_values = ParseMap::try_from(DATA).unwrap_or_else(|_| panic!("Properly parsed {}", DATA));
+        let mut key_values =
+            ParseMap::try_from(DATA).unwrap_or_else(|_| panic!("Properly parsed {}", DATA));
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value\"".into());
     }
@@ -260,7 +261,8 @@ mod tests {
     #[test]
     fn test_keyvalue_space_after_equals() {
         const DATA: &str = "key = value";
-        let mut key_values = ParseMap::try_from(DATA).unwrap_or_else(|_| panic!("Properly parsed {}", DATA));
+        let mut key_values =
+            ParseMap::try_from(DATA).unwrap_or_else(|_| panic!("Properly parsed {}", DATA));
         assert_eq!(key_values.len(), 1);
         assert_eq!(key_values.get("key").unwrap(), "value".into());
     }
@@ -288,8 +290,12 @@ mod tests {
 
     #[test]
     fn test_missing_end_quote_fails() {
-        const DATA : &str = "key = \"value";
+        const DATA: &str = "key = \"value";
         let key_values = ParseMap::try_from(DATA);
-        assert!(key_values.is_err(), "Should have failed to parse: {:?}", key_values);
+        assert!(
+            key_values.is_err(),
+            "Should have failed to parse: {:?}",
+            key_values
+        );
     }
 }

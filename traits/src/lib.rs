@@ -1,5 +1,5 @@
-pub use anyhow::Result;
 pub use anyhow;
-pub mod device;
+pub use anyhow::Result;
 pub mod companion;
+pub mod device;
 pub use async_trait::async_trait;

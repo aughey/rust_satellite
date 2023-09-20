@@ -126,7 +126,7 @@ impl Command<'_> {
     }
 }
 
-#[derive(PartialEq, Hash,Eq)]
+#[derive(PartialEq, Hash, Eq)]
 pub struct KeyState<'a> {
     pub device: StringOrStr<'a>,
     pub key: u8,
@@ -161,7 +161,7 @@ pub struct Brightness<'a> {
     pub brightness: u8,
 }
 
-#[derive(Debug, PartialEq,Hash, Eq)]
+#[derive(Debug, PartialEq, Hash, Eq)]
 pub struct AddDevice<'a> {
     pub success: bool,
     pub device_id: StringOrStr<'a>,

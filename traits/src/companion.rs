@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use crate::Result;
+use async_trait::async_trait;
 
 /// Receiver trait receives data from the companion app and
 /// converts it into commands for the device.

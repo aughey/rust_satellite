@@ -10,7 +10,7 @@ pub async fn run_satellite<DS, DR, CS, CR, CD, CC, CDF, CCF>(
 where
     CD: Fn() -> CDF,
     CDF: Future<Output = Result<(DS, DR)>>,
-    CC: Fn((&mut DS,&mut DR)) -> CCF,
+    CC: Fn((&mut DS, &mut DR)) -> CCF,
     CCF: Future<Output = Result<(CS, CR)>>,
     DS: traits::device::Sender + Send + 'static,
     DR: traits::device::Receiver + Send + 'static,
@@ -18,11 +18,10 @@ where
     CR: traits::companion::Receiver + Send + 'static,
 {
     let mut devices = create_device().await?;
-    let companions = create_companion((&mut devices.0,&mut devices.1)).await?;
+    let companions = create_companion((&mut devices.0, &mut devices.1)).await?;
 
     message_pump(devices.0, devices.1, companions.0, companions.1).await
 }
-
 
 pub async fn message_pump(
     device_controller: impl traits::device::Sender,
@@ -50,9 +49,7 @@ async fn handle_device_to_companion(
         let action = device_receiver.receive().await?;
         trace!("handle_device_to_companion: {:?}", action);
         match action {
-            traits::device::Command::Config(c) => {
-                companion_sender.config(c).await?
-            }
+            traits::device::Command::Config(c) => companion_sender.config(c).await?,
             traits::device::Command::ButtonChange(change) => {
                 companion_sender.button_change(change).await?
             }

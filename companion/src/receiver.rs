@@ -18,12 +18,8 @@ trait CommandProcessor {
     ) -> Result<Option<traits::device::DeviceCommands>>;
 }
 
+#[derive(Default)]
 struct DefaultCommandProcessor {}
-impl Default for DefaultCommandProcessor {
-    fn default() -> Self {
-        Self {}
-    }
-}
 impl CommandProcessor for DefaultCommandProcessor {
     fn process(
         &mut self,
@@ -145,7 +141,7 @@ pub struct Receiver<R> {
     reader: BufReader<R>,
     kind: Kind,
     processor: DefaultCommandProcessor,
-    cache: lru::LruCache<String, traits::device::DeviceCommands>
+    cache: lru::LruCache<String, traits::device::DeviceCommands>,
 }
 impl<R> Receiver<R>
 where
@@ -173,7 +169,7 @@ where
 
             if let Some(command) = self.cache.get(&line) {
                 return Ok(command.clone());
-            } 
+            }
 
             let command = Command::parse(&line)?;
 

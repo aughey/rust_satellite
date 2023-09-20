@@ -1,5 +1,5 @@
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 pub async fn receive_length_prefix(
     stream: &mut (impl AsyncRead + Unpin),
@@ -30,7 +30,7 @@ pub async fn write_length_prefix(
     buf: impl AsRef<[u8]>,
 ) -> std::io::Result<()> {
     let buf = buf.as_ref();
-    
+
     // Write the message length (u32)
     let length = buf.len() as u32;
     stream.write_all(&length.to_be_bytes()).await?;
@@ -41,9 +41,10 @@ pub async fn write_length_prefix(
     Ok(())
 }
 
-pub async fn read_struct<T>(
-    stream: &mut (impl AsyncRead + Unpin)
-) -> anyhow::Result<T> where T : serde::de::DeserializeOwned {
+pub async fn read_struct<T>(stream: &mut (impl AsyncRead + Unpin)) -> anyhow::Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
     let buf = receive_length_prefix(stream, Vec::new()).await?;
     let data = bincode::deserialize(&buf)?;
     Ok(data)

@@ -22,28 +22,28 @@ async fn main() -> Result<()> {
             stream.peer_addr()
         );
 
-        let (device_sender,mut device_receiver) =
+        let (device_sender, mut device_receiver) =
             gateway_devices::connect_device_to_socket(stream).await?;
 
         // Read the first message from the satellite to get the config
         let config_msg = device_receiver.receive().await?.as_config()?;
-        debug!("Received config: {:?}",config_msg );
-       
+        debug!("Received config: {:?}", config_msg);
 
-        info!("Connecting to companion app: {}:{}", args.host.as_str(), args.port);
+        info!(
+            "Connecting to companion app: {}:{}",
+            args.host.as_str(),
+            args.port
+        );
         let (companion_reader, companion_writer) =
             tokio::net::TcpStream::connect((args.host.as_str(), args.port))
                 .await?
                 .into_split();
-        
-        let kind = Kind::from_pid(config_msg.pid).ok_or_else(|| anyhow::anyhow!("Unknown pid {}", config_msg.pid))?;
+
+        let kind = Kind::from_pid(config_msg.pid)
+            .ok_or_else(|| anyhow::anyhow!("Unknown pid {}", config_msg.pid))?;
 
         let companion_receiver = companion::receiver::Receiver::new(companion_reader, kind);
-        let companion_sender = companion::sender::Sender::new(
-            companion_writer,
-            config_msg
-        )
-        .await?;
+        let companion_sender = companion::sender::Sender::new(companion_writer, config_msg).await?;
 
         // Spawn off a task to handle the connection
         tokio::spawn(async move {

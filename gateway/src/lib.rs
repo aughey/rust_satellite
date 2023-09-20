@@ -1,11 +1,7 @@
 pub use anyhow::Result;
 
-use clap::Parser;
 pub use bin_comm::stream_utils;
-
-
-
-
+use clap::Parser;
 
 #[derive(Parser)]
 pub struct Cli {
@@ -19,6 +15,3 @@ pub struct Cli {
     #[clap(default_value = "0.0.0.0")]
     pub listen_address: String,
 }
-
-
-

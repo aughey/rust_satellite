@@ -1,9 +1,5 @@
-
-
 use clap::Parser;
 use rust_satellite::{Cli, Result};
-
-
 
 use tracing::info;
 use traits::device::Receiver;
