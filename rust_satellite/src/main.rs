@@ -1,14 +1,11 @@
-use std::{ops::DerefMut, sync::Arc};
+
 
 use clap::Parser;
-use rust_satellite::{ButtonState, Cli, Result};
+use rust_satellite::{Cli, Result};
 
-use elgato_streamdeck::{asynchronous, images::ImageRect, info::Kind, list_devices, new_hidapi};
-use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    sync::Mutex,
-};
-use tracing::{debug, info, trace};
+
+
+use tracing::{info};
 use traits::device::Receiver;
 
 #[tokio::main]
