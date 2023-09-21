@@ -1,10 +1,40 @@
-# Rust-Satellite
+# Rust Satellite
 
-This is intended to be a clone in functionality of the [Companion Satellite](https://github.com/bitfocus/companion-satellite) application that is intended to be compiled and run on low-profile computers such as the Raspberry Pi Zero.
+Rust Satellite is a reimplementation of [Companion Satellite](https://bitfocus.io/companion-satellite) functionality, built using Rust. The aim is to provide a natively-compiled satellite application optimized for low-resource devices.
 
-My intended use is a remote control for an X32 audio mixer.  The desired use is to have a Stream Deck Plus sitting on the piano of the choir director and give them full control over the fader positions of each microphone in their chior.  My goal is to run the satellite application on a Raspberry Pi Zero with a PoE hat so that the footprint is tiny.  Ideally the PI is packaged inside the nook of the Stream Deck with a single cable to connect power and data.  Alternate packaging might use a LiPo battery for power and be completely wireless.
+The project originated from a weekend effort to integrate [Companion](https://bitfocus.io/companion) with a [Companion Satellite](https://bitfocus.io/companion-satellite) application on a Raspberry Pi Zero W. The Raspberry Pi Zero's compact form factor was chosen to enable a low-power, low-profile solution that could be powered via PoE (Power over Ethernet).
 
-Currently the satellite application is written in NodeJS, and the makers do not recommend nor support it running on anything less than a Raspberry PI 4.  I believe this is due to the heavy-weight overhead of node and the (possibly) lack of availability of the toolsets for the lower powered PI computers.  However, I also believe the computer is adequetly powered and, if written in a compiled language like Rust, will be able to perform its function in a low-resource environment.
+# Capabilities
+
+As of now, only the Streamdeck series of devices are supported.
+
+## rust_satellite 
+
+`rust_satellite ` is a fully-functional version of the satellite application that establishes a direct connection to the Companion app, using its existing ASCII protocol.
+
+## gateway
+
+`gateway` is designed to function alongside a `leaf` application. It serves as a middleman between the Companion app and low-resource `leaf` applications. gateway communicates with Companion using the ASCII protocol and forwards pre-formatted binary data to the leaf nodes. The objective is to offload resource-intensive tasks, like image processing, to a more capable host computer, thereby minimizing the resource needs of the end leaf nodes.
+
+## leaf
+
+`leaf` represents a leaf node connected to a `gateway` and the actual Streamdeck hardware. With minimal processing requirements, leaf is designed to operate even on basic embedded microcontrollers.
+
+# Academic
+
+While most users might find `rust_satellite` sufficient for their needs, the `gateway/leaf` architecture serves as an exploratory endeavor to push the boundaries of what's possible. One aim is to run a version of the leaf application on a Teensy 4.1 microcontroller.
+
+The academic objectives include:
+
+- Developing a leaf project using Rust's no-std feature, as described in the [Embedded rust book](https://docs.rust-embedded.org/book/intro/no-std.html)
+- Utilizing FFI (Foreign Function Interface) to leverage existing Ethernet and USB libraries for Arduino, as described in this [Blog](https://dev.to/kgrech/five-simple-steps-to-use-any-arduino-c-library-in-a-rust-project-1k78) and in repositories like [QNEthernet](https://github.com/ssilverman/QNEthernet) and [NativeEthernet](https://github.com/vjmuzik/NativeEthernet)
+- Employing the [smoltcp Rust IP stack](https://github.com/smoltcp-rs/smoltcp) for networking functionalities.
+
+# Background
+
+This project aims to clone the functionality of Companion Satellite for low-profile computing devices like the Raspberry Pi Zero. My intended application is as a remote control for an X32 audio mixer. The setup would allow a choir director to control microphone fader positions directly from a Stream Deck Plus located on a piano. The goal is to power the satellite application with a PoE-enabled Raspberry Pi Zero, ideally concealed within the Stream Deck's housing, connected by a single cable for power and data. Alternative setups might utilize a LiPo battery for a completely wireless solution.
+
+The original satellite application is written in NodeJS and is not recommended for use on devices with less computing power than a Raspberry Pi 4. This limitation is likely due to NodeJS's resource-intensive nature and potentially limited toolset support for lower-end Raspberry Pi models. However, I believe that a Rust-based reimplementation could efficiently run on these low-resource devices.
 
 # Update (gateway configuration)
 
@@ -12,12 +42,10 @@ To follow up on the native pi zero satellite application I wrote last weekend, I
 
 This is now the intended use.
 
-# Building
+# Cross-compiling with cross
+
+To cross-compile the application, first install Cross using `cargo install cross`.  Then, run the following command:
 
 ```
-PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig cross build --bin leaf --release --target arm-unknown-linux-gnueabihf
-```
-
-```
-PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig cross build --release --target arm-unknown-linux-gnueabihf --package simple_deck
+PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig cross build --release --target arm-unknown-linux-gnueabihf
 ```
