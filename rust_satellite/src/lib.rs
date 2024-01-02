@@ -20,4 +20,7 @@ pub struct Cli {
     /// port number of the companion app (usually 16622)
     #[arg(short, long)]
     pub companion_port: u16,
+    /// Device id to open
+    #[arg(short, long)]
+    pub device_id: Option<String>,
 }
