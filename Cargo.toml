@@ -10,6 +10,7 @@ members = [
     "gateway_devices",
     "pumps",
     "teensy_sim",
+    "teensy_host",
 ]
 
 [profile.release]
