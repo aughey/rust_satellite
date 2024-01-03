@@ -1,10 +1,16 @@
+use anyhow::Result;
 use common::StringOrStr;
-use tokio::net::ToSocketAddrs;
-use traits::{anyhow, Result};
 mod keyvalue;
+
+#[cfg(feature = "async")]
 pub mod receiver;
+#[cfg(feature = "async")]
 pub mod sender;
 
+#[cfg(feature = "async")]
+use tokio::net::ToSocketAddrs;
+
+#[cfg(feature = "async")]
 pub async fn connect(
     addr: impl ToSocketAddrs,
     config: traits::device::RemoteConfig,
@@ -23,7 +29,7 @@ pub async fn connect(
 }
 
 /// Commands that can be sent to the device
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Command<'a> {
     Pong,
     KeyPress(&'a str),
@@ -97,7 +103,10 @@ impl Command<'_> {
             }),
             "KEY-STATE" => Command::KeyState(KeyState {
                 device: get("DEVICEID")?,
-                key: get("KEY")?.parse()?,
+                key: get("KEY")?
+                    .as_str()
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("Could not parse key"))?,
                 button_type: get("TYPE")?,
                 bitmap_base64: get("BITMAP")?,
                 pressed: get("PRESSED")?.as_str() == "true",
@@ -108,7 +117,10 @@ impl Command<'_> {
             }),
             "BRIGHTNESS" => Command::Brightness(Brightness {
                 device: get("DEVICEID")?,
-                brightness: get("VALUE")?.parse()?,
+                brightness: get("VALUE")?
+                    .as_str()
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("Could not parse brightness"))?,
             }),
             _ => Command::Unknown(command),
         };
@@ -126,7 +138,7 @@ impl Command<'_> {
     }
 }
 
-#[derive(PartialEq, Hash, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct KeyState<'a> {
     pub device: StringOrStr<'a>,
     pub key: u8,
@@ -137,9 +149,13 @@ pub struct KeyState<'a> {
 impl KeyState<'_> {
     pub fn bitmap(&self) -> Result<Vec<u8>> {
         use base64::Engine as _;
-        let data = base64::engine::general_purpose::STANDARD_NO_PAD
-            .decode(self.bitmap_base64.as_ref().as_bytes())?;
-        Ok(data)
+        let mut buf = Vec::new();
+        match base64::engine::general_purpose::STANDARD_NO_PAD
+            .decode_vec(self.bitmap_base64.as_ref().as_bytes(), &mut buf)
+        {
+            Ok(_) => Ok(buf),
+            Err(_) => anyhow::bail!("Error decoding bitmap"),
+        }
     }
 }
 
@@ -155,19 +171,19 @@ impl std::fmt::Debug for KeyState<'_> {
     }
 }
 
-#[derive(Debug, PartialEq, Hash, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Brightness<'a> {
     pub device: StringOrStr<'a>,
     pub brightness: u8,
 }
 
-#[derive(Debug, PartialEq, Hash, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AddDevice<'a> {
     pub success: bool,
     pub device_id: StringOrStr<'a>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Versions<'a> {
     pub companion_version: StringOrStr<'a>,
     pub api_version: StringOrStr<'a>,

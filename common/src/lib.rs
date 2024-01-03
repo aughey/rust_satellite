@@ -1,9 +1,13 @@
 //! Common utilities that are shared across crates.
+#![no_std]
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 
-use std::str::FromStr;
+extern crate alloc;
+use alloc::str::FromStr;
+use alloc::string::String;
+
 
 /// A string that can be either a String or a &str
 /// This is used to optimize for values that could be either.
@@ -15,11 +19,6 @@ pub enum StringOrStr<'a> {
     String(String),
     /// A string reference
     Str(&'a str),
-}
-impl std::hash::Hash for StringOrStr<'_> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.as_ref().hash(state)
-    }
 }
 /// Convert from a string reference
 impl<'a> From<&'a str> for StringOrStr<'a> {

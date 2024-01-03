@@ -11,6 +11,7 @@ members = [
     "pumps",
     "teensy_sim",
     "teensy_host",
+    "teensy_lib",
 ]
 
 [profile.release]

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use crate::anyhow;
-use crate::Result;
+use anyhow::Result;
 use common::StringOrStr;
 use nom::{
     bytes::complete::{tag, take, take_while},

@@ -95,8 +95,8 @@ impl<DEV : HidDevice> StreamDeck<DEV> {
     pub fn new(
         device: DEV,
         kind: Kind,
-    ) -> Result<StreamDeck<DEV>, StreamDeckError> {
-        Ok(StreamDeck { kind, device })
+    ) -> StreamDeck<DEV> {
+        StreamDeck { kind, device }
     }
 }
 

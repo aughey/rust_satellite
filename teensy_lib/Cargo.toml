@@ -1,14 +1,12 @@
 [package]
-name = "teensy_host"
+name = "teensy_lib"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.79"
-companion = { version = "0.1.0", path = "../companion" }
+anyhow = {version="1.0.79", default-features = false }
+companion = { version = "0.1.0", default-features = false, path = "../companion" }
 elgato-streamdeck-local = { version = "0.4.1", path = "../elgato-streamdeck-local" }
-image = "0.24.7"
-teensy_lib = { version = "0.1.0", path = "../teensy_lib" }
-tokio = { version = "1.35.1", features = ["full"] }
+image = { version = "0.24.7", default-features = false, features = ["jpeg"] }

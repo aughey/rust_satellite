@@ -114,7 +114,7 @@ fn main() -> Result<()> {
     let mut companion_stream_reader = companion_stream.try_clone()?;
     companion_stream_reader.set_nonblocking(true)?;
 
-    teensy_host::run_teensy(
+    teensy_lib::run_teensy(
         move || {
             let mut buf = [0; 1];
             let bytes_read = companion_stream_reader.read(&mut buf);

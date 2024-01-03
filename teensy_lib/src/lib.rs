@@ -8,14 +8,14 @@ pub fn run_teensy(
     usb: impl HidDevice,
 ) -> Result<()> {
     // Connect to the device
-    let device = elgato_streamdeck_local::StreamDeck::new(
-        usb,
-        elgato_streamdeck_local::info::Kind::Mk2,
-    )?;
+    let device =
+        elgato_streamdeck_local::StreamDeck::new(usb, elgato_streamdeck_local::info::Kind::Mk2);
 
     // Connect to companion
     // Read from the companion stream and write to console
-    let serial_number = device.serial_number()?;
+    let serial_number = device
+        .serial_number()
+        .map_err(|_| anyhow::anyhow!("Could not get serial number"))?;
     println!("Serial number: {}", serial_number);
 
     // Get our kind from the config
@@ -31,7 +31,12 @@ pub fn run_teensy(
                 product_name: format!("TeensySatellite StreamDeck: {}", kind.to_string()),
                 keys_total: kind.key_count(),
                 keys_per_row: kind.column_count(),
-                resolution: kind.key_image_format().size.0.try_into()?,
+                resolution: kind
+                    .key_image_format()
+                    .size
+                    .0
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("Cannot convert resolution"))?,
             }
             .device_msg()
         )
@@ -39,8 +44,12 @@ pub fn run_teensy(
     )?;
 
     // do something with device
-    device.reset()?;
-    device.set_brightness(10)?;
+    device
+        .reset()
+        .map_err(|_| anyhow::anyhow!("Could not reset device"))?;
+    device
+        .set_brightness(10)
+        .map_err(|_| anyhow::anyhow!("Could not set brightness"))?;
 
     // loop forever
     let mut line_accumulator = LineAccumulator::default();
@@ -93,19 +102,23 @@ pub fn run_teensy(
                             }
                             let image = image::DynamicImage::ImageRgb8(
                                 image::ImageBuffer::from_vec(
-                                    size.try_into()?,
-                                    size.try_into()?,
+                                    size.try_into()
+                                        .map_err(|_| anyhow::anyhow!("Could not convert size"))?,
+                                    size.try_into()
+                                        .map_err(|_| anyhow::anyhow!("Could not convert size"))?,
                                     ks.bitmap()?,
                                 )
                                 .ok_or_else(|| anyhow::anyhow!("Couldn't extract image buffer"))?,
                             );
-                            let image =
-                                elgato_streamdeck_local::images::convert_image(kind, image)?;
-                            device.write_image(ks.key, &image)?;
+                            let image = elgato_streamdeck_local::images::convert_image(kind, image)
+                                .map_err(|_| anyhow::anyhow!("Could not convert image"))?;
+                            device
+                                .write_image(ks.key, &image)
+                                .map_err(|_| anyhow::anyhow!("Could not write image"))?;
                         }
                         Command::Brightness(b) => {
                             println!("Got brightness: {}", b.brightness);
-                            device.set_brightness(b.brightness)?;
+                            device.set_brightness(b.brightness).map_err(|_| anyhow::anyhow!("Could not set brightness"))?;
                         }
                         Command::Unknown(_) => todo!(),
                     }
