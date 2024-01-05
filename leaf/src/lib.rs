@@ -13,15 +13,3 @@
 #![warn(missing_docs)]
 
 pub use traits::Result;
-use clap::Parser;
-
-/// Command line options for a leaf program
-#[derive(Parser)]
-pub struct Cli {
-    /// IP address of the gateway
-    #[arg(long)]
-    pub gateway_host: String,
-    /// Port number of the gateway
-    #[arg(short, long)]
-    pub gateway_port: u16,
-}

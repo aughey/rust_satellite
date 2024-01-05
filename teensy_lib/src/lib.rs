@@ -1,6 +1,162 @@
+#![no_std]
+
 use anyhow::Result;
-use companion::Command;
 use elgato_streamdeck_local::HidDevice;
+
+extern crate alloc;
+use alloc::vec::Vec;
+use leaf_comm::{Command, DeviceActions, RemoteConfig};
+
+fn rust_try_read_network() -> Result<Option<u8>> {
+    let mut buf = [0u8; 1];
+    let success = unsafe { arduino_try_read_network(buf.as_mut_ptr()) };
+    if success {
+        Ok::<_, anyhow::Error>(Some(buf[0]))
+    } else {
+        Ok(None)
+    }
+}
+
+fn rust_write_network(buf: &[u8]) -> Result<()> {
+    let success = unsafe { arduino_write_network(buf.as_ptr(), buf.len() as u32) };
+    if success {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("Could not write to network"))
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn run_rust() {
+    let usb = ArduinoUSB {};
+    _ = run_teensy(rust_try_read_network, rust_write_network, usb);
+}
+
+#[no_mangle]
+pub extern "C" fn run_led_test() {
+    loop {
+        unsafe {
+            arduino_led(true);
+        }
+        unsafe {
+            arduino_sleep_seconds(1);
+        }
+        unsafe {
+            arduino_led(false);
+        }
+        unsafe {
+            arduino_sleep_seconds(1);
+        }
+    }
+}
+
+struct ArduinoUSB {}
+impl HidDevice for ArduinoUSB {
+    fn read_timeout(
+        &self,
+        buf: &mut [u8],
+        _timeout: i32,
+    ) -> core::prelude::v1::Result<(), elgato_streamdeck_local::HidError> {
+        // Call the arduino C version of this
+        let success = unsafe { arduino_usb_read_timeout(buf.as_mut_ptr(), buf.len() as u32) };
+        if success {
+            Ok(())
+        } else {
+            Err(elgato_streamdeck_local::HidError {})
+        }
+    }
+
+    fn read(
+        &self,
+        buf: &mut [u8],
+    ) -> core::prelude::v1::Result<(), elgato_streamdeck_local::HidError> {
+        let success = unsafe { arduino_usb_read(buf.as_mut_ptr(), buf.len() as u32) };
+        if success {
+            Ok(())
+        } else {
+            Err(elgato_streamdeck_local::HidError {})
+        }
+    }
+
+    fn write(
+        &self,
+        payload: &[u8],
+    ) -> core::prelude::v1::Result<usize, elgato_streamdeck_local::HidError> {
+        let success = unsafe { arduino_usb_write(payload.as_ptr(), payload.len() as u32) };
+        if success {
+            Ok(payload.len())
+        } else {
+            Err(elgato_streamdeck_local::HidError {})
+        }
+    }
+
+    fn get_feature_report(
+        &self,
+        buf: &mut [u8],
+    ) -> core::prelude::v1::Result<(), elgato_streamdeck_local::HidError> {
+        let success = unsafe { arduino_usb_get_feature_report(buf.as_mut_ptr(), buf.len() as u32) };
+        if success {
+            Ok(())
+        } else {
+            Err(elgato_streamdeck_local::HidError {})
+        }
+    }
+
+    fn send_feature_report(
+        &self,
+        payload: &[u8],
+    ) -> core::prelude::v1::Result<(), elgato_streamdeck_local::HidError> {
+        let success = unsafe { arduino_usb_send_feature_report(payload.as_ptr(), payload.len() as u32) };
+        if success {
+            Ok(())
+        } else {
+            Err(elgato_streamdeck_local::HidError {})
+        }
+    }
+}
+
+#[cfg(feature = "arduino_allocator")]
+#[global_allocator]
+static GLOBAL: ArduinoAllocator = ArduinoAllocator;
+
+#[cfg(feature = "arduino_allocator")]
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    unsafe {
+        arduino_led(true);
+    }
+    loop {}
+}
+
+struct ArduinoAllocator;
+// Implement the GlobalAlloc trait for ArduinoAllocator
+unsafe impl core::alloc::GlobalAlloc for ArduinoAllocator {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        arduino_malloc(layout.size() as u32)
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: core::alloc::Layout) {
+        arduino_free(ptr)
+    }
+}
+
+// These are methods that we can call defined in C
+extern "C" {
+    fn arduino_try_read_network(byte_ptr: *mut u8) -> bool;
+    fn arduino_write_network(byte_ptr: *const u8, len: u32) -> bool;
+
+    fn arduino_usb_read_timeout(buf: *mut u8, len: u32) -> bool;
+    fn arduino_usb_read(buf: *mut u8, len: u32) -> bool;
+    fn arduino_usb_write(buf: *const u8, len: u32) -> bool;
+    fn arduino_usb_get_feature_report(buf: *mut u8, len: u32) -> bool;
+    fn arduino_usb_send_feature_report(payload: *const u8, len: u32) -> bool;
+
+    fn arduino_malloc(size: u32) -> *mut u8;
+    fn arduino_free(ptr: *mut u8);
+
+    fn arduino_led(on: bool);
+    fn arduino_sleep_seconds(seconds: u32);
+}
 
 pub fn run_teensy(
     mut try_read_network: impl FnMut() -> Result<Option<u8>>,
@@ -16,32 +172,38 @@ pub fn run_teensy(
     let serial_number = device
         .serial_number()
         .map_err(|_| anyhow::anyhow!("Could not get serial number"))?;
-    println!("Serial number: {}", serial_number);
+    //println!("Serial number: {}", serial_number);
 
     // Get our kind from the config
     let pid = 0x0080;
-    let kind = elgato_streamdeck_local::info::Kind::from_pid(pid)
-        .ok_or_else(|| anyhow::anyhow!("Unknown pid {}", pid))?;
 
-    write_network(
-        format!(
-            "ADD-DEVICE {}\n",
-            companion::DeviceMsg {
-                device_id: serial_number,
-                product_name: format!("TeensySatellite StreamDeck: {}", kind.to_string()),
-                keys_total: kind.key_count(),
-                keys_per_row: kind.column_count(),
-                resolution: kind
-                    .key_image_format()
-                    .size
-                    .0
-                    .try_into()
-                    .map_err(|_| anyhow::anyhow!("Cannot convert resolution"))?,
-            }
-            .device_msg()
-        )
-        .as_bytes(),
-    )?;
+    // Send config to companion
+    let config = RemoteConfig {
+        pid,
+        device_id: serial_number,
+    };
+    // Write this to the network
+    frame_write(&Command::Config(config), &mut write_network)?;
+
+    // write_network(
+    //     format!(
+    //         "ADD-DEVICE {}\n",
+    //         companion::DeviceMsg {
+    //             device_id: serial_number,
+    //             product_name: format!("TeensySatellite StreamDeck: {}", kind.to_string()),
+    //             keys_total: kind.key_count(),
+    //             keys_per_row: kind.column_count(),
+    //             resolution: kind
+    //                 .key_image_format()
+    //                 .size
+    //                 .0
+    //                 .try_into()
+    //                 .map_err(|_| anyhow::anyhow!("Cannot convert resolution"))?,
+    //         }
+    //         .device_msg()
+    //     )
+    //     .as_bytes(),
+    // )?;
 
     // do something with device
     device
@@ -52,77 +214,35 @@ pub fn run_teensy(
         .map_err(|_| anyhow::anyhow!("Could not set brightness"))?;
 
     // loop forever
-    let mut line_accumulator = LineAccumulator::default();
-    let mut ping_time = std::time::Instant::now();
+    let mut frame_accumulator = FrameAccumulator::default();
     loop {
-        // Handle ping
-        if ping_time.elapsed().as_secs() > 1 {
-            write_network(b"PING\n")?;
-            ping_time = std::time::Instant::now();
-        }
         // Try reading from socket
         let value = try_read_network()?;
         match value {
             None => {}
             Some(value) => {
-                if let Some(line) = line_accumulator.add_char(value) {
-                    let command = Command::parse(line)?;
-                    match command {
-                        Command::Pong => {}
-                        Command::KeyPress(_) => {}
-                        Command::KeyRotate(_) => {}
-                        Command::Begin(info) => {
-                            println!("Begin: {:?}", info);
-                            // api version must be 1.5.1
-                            if info.api_version.as_str() != "1.5.1" {
-                                anyhow::bail!(
-                                    "Unsupported api version: {}",
-                                    info.api_version.as_str()
-                                );
-                            }
-                        }
-                        Command::AddDevice(info) => {
-                            // Must be success
-                            if info.success {
-                                println!("Added device: {:?}", info);
-                            } else {
-                                println!("Failed to add device: {:?}", info);
-                                anyhow::bail!("Failed to add device");
-                            }
-                        }
-                        Command::KeyState(ks) => {
-                            let size = kind.key_image_format().size.0;
-                            let bitmap = ks.bitmap()?;
-                            if bitmap.len() != size * size * 3 {
-                                anyhow::bail!(
-                                    "Expected bitmap to be len {}, but was {}",
-                                    size * size * 3,
-                                    bitmap.len()
-                                );
-                            }
-                            let image = image::DynamicImage::ImageRgb8(
-                                image::ImageBuffer::from_vec(
-                                    size.try_into()
-                                        .map_err(|_| anyhow::anyhow!("Could not convert size"))?,
-                                    size.try_into()
-                                        .map_err(|_| anyhow::anyhow!("Could not convert size"))?,
-                                    ks.bitmap()?,
-                                )
-                                .ok_or_else(|| anyhow::anyhow!("Couldn't extract image buffer"))?,
-                            );
-                            let image = elgato_streamdeck_local::images::convert_image(kind, image)
-                                .map_err(|_| anyhow::anyhow!("Could not convert image"))?;
+                if let Some(frame) = frame_accumulator.add_char(value) {
+                    //println!("Got frame size: {}", frame.len());
+                    let action: DeviceActions = postcard::from_bytes(frame)
+                        .map_err(|_| anyhow::anyhow!("Cannot generate from bytes"))?;
+                    match action {
+                        DeviceActions::SetButtonImage(b) => {
+                            //println!("Set button image: {:?}", b.button);
                             device
-                                .write_image(ks.key, &image)
+                                .write_image(b.button, &b.image)
                                 .map_err(|_| anyhow::anyhow!("Could not write image"))?;
                         }
-                        Command::Brightness(b) => {
-                            println!("Got brightness: {}", b.brightness);
-                            device.set_brightness(b.brightness).map_err(|_| anyhow::anyhow!("Could not set brightness"))?;
+                        DeviceActions::SetLCDImage(_l) => {
+                            //println!("Set LCD image: {:?}", l);
                         }
-                        Command::Unknown(_) => todo!(),
+                        DeviceActions::SetBrightness(b) => {
+                            //println!("Set brightness: {:?}", b);
+                            device
+                                .set_brightness(b.brightness)
+                                .map_err(|_| anyhow::anyhow!("Could not set brightness"))?;
+                        }
                     }
-                    line_accumulator.clear();
+                    frame_accumulator.clear();
                 }
             }
         }
@@ -133,20 +253,56 @@ pub fn run_teensy(
 }
 
 #[derive(Default)]
-struct LineAccumulator {
+struct FrameAccumulator {
     buf: Vec<u8>,
+    size: Option<usize>,
 }
-impl LineAccumulator {
+impl FrameAccumulator {
     fn clear(&mut self) {
         self.buf.clear();
+        self.size = None;
     }
-    fn add_char(&mut self, c: u8) -> Option<&str> {
-        if c == b'\n' {
-            let s = std::str::from_utf8(&self.buf).unwrap();
-            Some(s)
-        } else {
-            self.buf.push(c);
-            None
+    fn add_char(&mut self, c: u8) -> Option<&[u8]> {
+        self.buf.push(c);
+        match self.size {
+            Some(size) => {
+                if self.buf.len() == size {
+                    Some(self.buf.as_slice())
+                } else {
+                    None
+                }
+            }
+            None => {
+                if self.buf.len() == 4 {
+                    let size =
+                        u32::from_be_bytes([self.buf[0], self.buf[1], self.buf[2], self.buf[3]]);
+                    if size != 0 {
+                        self.size = Some(size as usize);
+                        self.buf.clear();
+                        None
+                    } else {
+                        Some(&[])
+                    }
+                } else {
+                    None
+                }
+            }
         }
     }
+}
+
+fn frame_write<D>(data: &D, mut write_network: impl FnMut(&[u8]) -> Result<()>) -> Result<()>
+where
+    D: serde::Serialize,
+{
+    let data =
+        postcard::to_vec::<_, 128>(data).map_err(|_| anyhow::anyhow!("Cannot serialize data"))?;
+    let size: u32 = data
+        .len()
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("data len too big"))?;
+    let size = size.to_be_bytes();
+    write_network(&size)?;
+    write_network(&data)?;
+    Ok(())
 }

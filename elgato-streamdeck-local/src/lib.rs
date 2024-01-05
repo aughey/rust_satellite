@@ -1,3 +1,4 @@
+#![no_std]
 //! Elgato Streamdeck library
 //!
 //! Library for interacting with Elgato Stream Decks through [hidapi](https://crates.io/crates/hidapi).
@@ -5,12 +6,19 @@
 //! [streamdeck library for rust](https://github.com/ryankurte/rust-streamdeck).
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![warn(missing_docs)]
 
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::str::Utf8Error;
-use std::time::Duration;
+extern crate alloc;
+use core::fmt::{Display, Formatter};
+use core::str::Utf8Error;
+
+use alloc::string::String;
+use alloc::vec::Vec;
+use alloc::vec;
+
+// use std::error::Error;
+// use std::fmt::{Display, Formatter};
+// use std::str::Utf8Error;
+// use std::time::Duration;
 
 #[derive(Debug)]
 pub struct HidError {
@@ -24,17 +32,14 @@ pub trait HidDevice {
     fn send_feature_report(&self, payload: &[u8]) -> Result<(), HidError>;
 }
 
-use crate::images::{convert_image, ImageRect};
-use image::{DynamicImage, ImageError};
 
-use crate::info::{Kind, ELGATO_VENDOR_ID};
+//use crate::info::{Kind, ELGATO_VENDOR_ID};
+use crate::info::Kind;
 use crate::util::{
     extract_str, flip_key_index, get_feature_report, read_button_states, read_data,
     read_encoder_input, read_lcd_input, send_feature_report, write_data,
 };
 
-/// Image processing functions
-pub mod images;
 /// Various information about Stream Deck devices
 pub mod info;
 /// Utility functions for working with Stream Deck devices
@@ -143,9 +148,9 @@ impl<DEV: HidDevice> StreamDeck<DEV> {
     }
 
     /// Reads all possible input from Stream Deck device
-    pub fn read_input(
+    pub fn read_input_poll(
         &self,
-        timeout: Option<Duration>,
+        timeout: bool
     ) -> Result<StreamDeckInput, StreamDeckError> {
         match &self.kind {
             Kind::Plus => {
@@ -340,73 +345,72 @@ impl<DEV: HidDevice> StreamDeck<DEV> {
     }
 
     /// Writes image data to Stream Deck device's lcd strip/screen
-    pub fn write_lcd(&self, x: u16, y: u16, rect: &ImageRect) -> Result<(), StreamDeckError> {
-        match self.kind {
-            Kind::Plus => {}
-            _ => return Err(StreamDeckError::UnsupportedOperation),
-        }
+    // pub fn write_lcd(&self, x: u16, y: u16, rect: &ImageRect) -> Result<(), StreamDeckError> {
+    //     match self.kind {
+    //         Kind::Plus => {}
+    //         _ => return Err(StreamDeckError::UnsupportedOperation),
+    //     }
 
-        let image_report_length = 1024;
+    //     let image_report_length = 1024;
 
-        let image_report_header_length = 16;
+    //     let image_report_header_length = 16;
 
-        let image_report_payload_length = image_report_length - image_report_header_length;
+    //     let image_report_payload_length = image_report_length - image_report_header_length;
 
-        let mut page_number = 0;
-        let mut bytes_remaining = rect.data.len();
+    //     let mut page_number = 0;
+    //     let mut bytes_remaining = rect.data.len();
 
-        while bytes_remaining > 0 {
-            let this_length = bytes_remaining.min(image_report_payload_length);
-            let bytes_sent = page_number * image_report_payload_length;
+    //     while bytes_remaining > 0 {
+    //         let this_length = bytes_remaining.min(image_report_payload_length);
+    //         let bytes_sent = page_number * image_report_payload_length;
 
-            // Selecting header based on device
-            let mut buf: Vec<u8> = vec![
-                0x02,
-                0x0c,
-                (x & 0xff) as u8,
-                (x >> 8) as u8,
-                (y & 0xff) as u8,
-                (y >> 8) as u8,
-                (rect.w & 0xff) as u8,
-                (rect.w >> 8) as u8,
-                (rect.h & 0xff) as u8,
-                (rect.h >> 8) as u8,
-                if bytes_remaining <= image_report_payload_length {
-                    1
-                } else {
-                    0
-                },
-                (page_number & 0xff) as u8,
-                (page_number >> 8) as u8,
-                (this_length & 0xff) as u8,
-                (this_length >> 8) as u8,
-                0,
-            ];
+    //         // Selecting header based on device
+    //         let mut buf: Vec<u8> = vec![
+    //             0x02,
+    //             0x0c,
+    //             (x & 0xff) as u8,
+    //             (x >> 8) as u8,
+    //             (y & 0xff) as u8,
+    //             (y >> 8) as u8,
+    //             (rect.w & 0xff) as u8,
+    //             (rect.w >> 8) as u8,
+    //             (rect.h & 0xff) as u8,
+    //             (rect.h >> 8) as u8,
+    //             if bytes_remaining <= image_report_payload_length {
+    //                 1
+    //             } else {
+    //                 0
+    //             },
+    //             (page_number & 0xff) as u8,
+    //             (page_number >> 8) as u8,
+    //             (this_length & 0xff) as u8,
+    //             (this_length >> 8) as u8,
+    //             0,
+    //         ];
 
-            buf.extend(&rect.data[bytes_sent..bytes_sent + this_length]);
+    //         buf.extend(&rect.data[bytes_sent..bytes_sent + this_length]);
 
-            // Adding padding
-            buf.extend(vec![0u8; image_report_length - buf.len()]);
+    //         // Adding padding
+    //         buf.extend(vec![0u8; image_report_length - buf.len()]);
 
-            write_data(&self.device, &buf)?;
+    //         write_data(&self.device, &buf)?;
 
-            bytes_remaining -= this_length;
-            page_number += 1;
-        }
+    //         bytes_remaining -= this_length;
+    //         page_number += 1;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     /// Sets button's image to blank
     pub fn clear_button_image(&self, key: u8) -> Result<(), StreamDeckError> {
         self.write_image(key, &self.kind.blank_image())
     }
 
-    /// Sets specified button's image
-    pub fn set_button_image(&self, key: u8, image: DynamicImage) -> Result<(), StreamDeckError> {
-        let image_data = convert_image(self.kind, image)?;
-        self.write_image(key, &image_data)
-    }
+    // pub fn set_button_image(&self, key: u8, image: DynamicImage) -> Result<(), StreamDeckError> {
+    //     let image_data = convert_image(self.kind, image)?;
+    //     self.write_image(key, &image_data)
+    // }
 }
 
 /// Errors that can occur while working with Stream Decks
@@ -415,11 +419,8 @@ pub enum StreamDeckError {
     /// HidApi error
     HidError(HidError),
 
-    /// Failed to convert bytes into string
+    // /// Failed to convert bytes into string
     Utf8Error(Utf8Error),
-
-    /// Failed to encode image
-    ImageError(ImageError),
 
     #[cfg(feature = "async")]
     #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
@@ -443,12 +444,12 @@ pub enum StreamDeckError {
 }
 
 impl Display for StreamDeckError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl Error for StreamDeckError {}
+//impl Error for StreamDeckError {}
 
 impl From<HidError> for StreamDeckError {
     fn from(e: HidError) -> Self {
@@ -456,21 +457,17 @@ impl From<HidError> for StreamDeckError {
     }
 }
 
-impl From<Utf8Error> for StreamDeckError {
-    fn from(e: Utf8Error) -> Self {
-        Self::Utf8Error(e)
-    }
-}
 
-impl From<ImageError> for StreamDeckError {
-    fn from(e: ImageError) -> Self {
-        Self::ImageError(e)
-    }
-}
 
 #[cfg(feature = "async")]
 impl From<tokio::task::JoinError> for StreamDeckError {
     fn from(e: tokio::task::JoinError) -> Self {
         Self::JoinError(e)
+    }
+}
+
+impl From<Utf8Error> for StreamDeckError {
+    fn from(e: Utf8Error) -> Self {
+        Self::Utf8Error(e)
     }
 }

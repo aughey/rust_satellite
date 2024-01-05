@@ -7,13 +7,14 @@
 
 use crate::Result;
 use async_trait::async_trait;
+use leaf_comm::{DeviceActions, RemoteConfig, ButtonChange, EncoderTwist};
 
 /// Receiver trait receives data from the companion app and
 /// converts it into commands for the device.
 #[async_trait]
 pub trait Receiver {
     /// asynchronously receive a device command from the companion app
-    async fn receive(&mut self) -> Result<crate::device::DeviceActions>;
+    async fn receive(&mut self) -> Result<DeviceActions>;
 }
 
 /// Sender trait is used to notify the companion app of events read from
@@ -22,11 +23,11 @@ pub trait Receiver {
 pub trait Sender {
     /// Configuration has changed.  This should be sent prior to any other
     /// commands and should only be called once.
-    async fn config(&mut self, config: crate::device::RemoteConfig) -> Result<()>;
+    async fn config(&mut self, config: RemoteConfig) -> Result<()>;
     /// A button has changed state.  The ButtonChange object has a list of buttons
     /// that have changed.
-    async fn button_change(&mut self, change: crate::device::ButtonChange) -> Result<()>;
+    async fn button_change(&mut self, change: ButtonChange) -> Result<()>;
     /// An encoder has been twisted.  The EncoderTwist object has a list of encoders
     /// that have changed.
-    async fn encoder_twist(&mut self, twist: crate::device::EncoderTwist) -> Result<()>;
+    async fn encoder_twist(&mut self, twist: EncoderTwist) -> Result<()>;
 }

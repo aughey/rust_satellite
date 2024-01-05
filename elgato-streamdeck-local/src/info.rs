@@ -1,3 +1,7 @@
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use alloc::vec;
+
 /// HIDAPI Vendor ID that Elgato products use
 pub const ELGATO_VENDOR_ID: u16 = 0x0fd9;
 

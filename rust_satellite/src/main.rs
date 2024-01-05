@@ -13,7 +13,14 @@ async fn main() -> Result<()> {
     info!("Starting native satellite application");
 
     let mut streamdeck = streamdeck::StreamDeck::open_first().await?;
-    let first_msg = streamdeck.0.receive().await?.as_config()?;
+    let first_msg = streamdeck.0.receive().await?;
+    let first_msg = match first_msg {
+        traits::device::Command::Config(c) => traits::device::RemoteConfig {
+            pid: c.pid.try_into()?,
+            device_id: c.device_id,
+        },
+        _ => anyhow::bail!("Expected config msg to be first"),
+    };
 
     pumps::create_and_run(
         move || {

@@ -1,7 +1,17 @@
 use leaf::Result;
 use clap::Parser;
-use leaf::Cli;
 use tracing::info;
+
+/// Command line options for a leaf program
+#[derive(Parser)]
+pub struct Cli {
+    /// IP address of the gateway
+    #[arg(long)]
+    pub gateway_host: String,
+    /// Port number of the gateway
+    #[arg(short, long)]
+    pub gateway_port: u16,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {

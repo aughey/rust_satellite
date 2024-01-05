@@ -1,12 +1,9 @@
 use std::cell::RefCell;
 use std::io::{BufRead, Read};
 use std::io::{BufReader, Write};
-use std::net::TcpStream;
 
 use anyhow::Result;
-use companion::Command;
 use elgato_streamdeck_local::{HidDevice, HidError};
-use image::codecs::png::PngDecoder;
 
 struct StreamWrapper {
     stream: RefCell<std::net::TcpStream>,
@@ -44,7 +41,7 @@ impl HidDevice for StreamWrapper {
         Ok(())
     }
 
-    fn read_timeout(&self, buf: &mut [u8], timeout: i32) -> Result<(), HidError> {
+    fn read_timeout(&self, buf: &mut [u8], _timeout: i32) -> Result<(), HidError> {
         self.stream
             .borrow_mut()
             .write_all(format!("tryread {}\n", buf.len()).as_bytes())
@@ -110,7 +107,7 @@ fn main() -> Result<()> {
     };
 
     // Connect to companion
-    let mut companion_stream = std::net::TcpStream::connect("host.docker.internal:16622")?;
+    let mut companion_stream = std::net::TcpStream::connect("localhost:12345")?;
     let mut companion_stream_reader = companion_stream.try_clone()?;
     companion_stream_reader.set_nonblocking(true)?;
 

@@ -98,8 +98,8 @@ where
     R: AsyncRead + Unpin + Send,
 {
     /// read the command from the provided reader and return it to the caller.
-    async fn receive(&mut self) -> Result<traits::device::Command> {
-        let command: traits::device::Command =
+    async fn receive(&mut self) -> Result<leaf_comm::Command> {
+        let command: leaf_comm::Command =
             bin_comm::stream_utils::read_struct(&mut self.reader).await?;
         trace!("GatewayDeviceReceiver::Receiver: {:?}", command);
         Ok(command)
@@ -127,24 +127,24 @@ impl<W> traits::companion::Sender for GatewayCompanionSender<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
-    async fn config(&mut self, config: traits::device::RemoteConfig) -> Result<()> {
+    async fn config(&mut self, config: leaf_comm::RemoteConfig) -> Result<()> {
         GatewayCompanionSender::send_companion_command(
             &mut self.writer,
-            traits::device::Command::Config(config),
+            leaf_comm::Command::Config(config),
         )
         .await
     }
-    async fn button_change(&mut self, change: traits::device::ButtonChange) -> Result<()> {
+    async fn button_change(&mut self, change: leaf_comm::ButtonChange) -> Result<()> {
         GatewayCompanionSender::send_companion_command(
             &mut self.writer,
-            traits::device::Command::ButtonChange(change),
+            leaf_comm::Command::ButtonChange(change),
         )
         .await
     }
-    async fn encoder_twist(&mut self, twist: traits::device::EncoderTwist) -> Result<()> {
+    async fn encoder_twist(&mut self, twist: leaf_comm::EncoderTwist) -> Result<()> {
         GatewayCompanionSender::send_companion_command(
             &mut self.writer,
-            traits::device::Command::EncoderTwist(twist),
+            leaf_comm::Command::EncoderTwist(twist),
         )
         .await
     }
@@ -154,7 +154,7 @@ impl<W> GatewayCompanionSender<W>
 where
     W: AsyncWrite + Unpin + Send,
 {
-    async fn send_companion_command(stream: &mut W, command: traits::device::Command) -> Result<()>
+    async fn send_companion_command(stream: &mut W, command: leaf_comm::Command) -> Result<()>
     where
         W: AsyncWrite + Unpin,
     {

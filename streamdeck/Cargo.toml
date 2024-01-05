@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 elgato-streamdeck = { version = "0.4.1", path = "../elgato-streamdeck", features = ["async"] }
+leaf_comm = { version = "0.1.0", path = "../leaf_comm" }
 tracing = "0.1.37"
 traits = { version = "0.1.0", path = "../traits" }

@@ -135,14 +135,14 @@ impl traits::device::Sender for StreamDeck {
 
 #[async_trait]
 impl traits::device::Receiver for StreamDeck {
-    async fn receive(&mut self) -> Result<traits::device::Command> {
+    async fn receive(&mut self) -> Result<leaf_comm::Command> {
         // the first message must be the config.
         trace!("receive");
         if self.first {
             trace!("First read");
             self.first = false;
-            return Ok(traits::device::Command::Config(
-                traits::device::RemoteConfig {
+            return Ok(leaf_comm::Command::Config(
+                leaf_comm::RemoteConfig {
                     pid: self.device.kind().product_id(),
                     device_id: self.device.serial_number().await?,
                 },
@@ -153,8 +153,8 @@ impl traits::device::Receiver for StreamDeck {
             match buttons {
                 elgato_streamdeck::StreamDeckInput::NoData => {}
                 elgato_streamdeck::StreamDeckInput::ButtonStateChange(buttons) => {
-                    return Ok(traits::device::Command::ButtonChange(
-                        traits::device::ButtonChange {
+                    return Ok(leaf_comm::Command::ButtonChange(
+                        leaf_comm::ButtonChange {
                             buttons: self
                                 .keystate
                                 .update_state(0, buttons.into_iter().enumerate())
@@ -169,8 +169,8 @@ impl traits::device::Receiver for StreamDeck {
                         .enumerate()
                         .filter(|(_i, v)| *v != 0)
                         .map(|(i, v)| (i as u8, v));
-                    return Ok(traits::device::Command::EncoderTwist(
-                        traits::device::EncoderTwist {
+                    return Ok(leaf_comm::Command::EncoderTwist(
+                        leaf_comm::EncoderTwist {
                             encoders: twists.collect(),
                         },
                     ));

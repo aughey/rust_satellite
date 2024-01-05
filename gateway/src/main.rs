@@ -2,7 +2,7 @@ use clap::Parser;
 use elgato_streamdeck::info::Kind;
 use gateway::{Cli, Result};
 use tracing::{debug, info};
-use traits::device::Receiver;
+use traits::device::{Receiver, RemoteConfig};
 use traits::anyhow;
 
 #[tokio::main]
@@ -27,7 +27,14 @@ async fn main() -> Result<()> {
             gateway_devices::device_from_socket(stream).await?;
 
         // Read the first message from the satellite to get the config
-        let config_msg = device_receiver.receive().await?.as_config()?;
+        let config_msg = device_receiver.receive().await?;
+        let config_msg = match config_msg {
+            traits::device::Command::Config(c) => RemoteConfig {
+                pid: c.pid.try_into()?,
+                device_id: c.device_id,
+            },
+            _ => anyhow::bail!("Expected config msg to be first")
+        };
         debug!("Received config: {:?}", config_msg);
 
         info!(

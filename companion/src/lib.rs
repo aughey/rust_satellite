@@ -2,15 +2,11 @@ use anyhow::Result;
 use common::StringOrStr;
 mod keyvalue;
 
-#[cfg(feature = "async")]
 pub mod receiver;
-#[cfg(feature = "async")]
 pub mod sender;
 
-#[cfg(feature = "async")]
 use tokio::net::ToSocketAddrs;
 
-#[cfg(feature = "async")]
 pub async fn connect(
     addr: impl ToSocketAddrs,
     config: traits::device::RemoteConfig,

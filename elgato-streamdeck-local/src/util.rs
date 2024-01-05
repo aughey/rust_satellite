@@ -1,7 +1,10 @@
 use crate::{Kind, StreamDeckError, StreamDeckInput};
-use std::str::{from_utf8, Utf8Error};
-use std::time::Duration;
+use alloc::str::{from_utf8, Utf8Error};
 use crate::{HidDevice,HidError};
+
+use alloc::vec::Vec;
+use alloc::vec;
+use alloc::string::String;
 
 /// Performs get_feature_report on [HidDevice]
 pub fn get_feature_report(
@@ -29,13 +32,13 @@ pub fn send_feature_report(device: &impl HidDevice, payload: &[u8]) -> Result<()
 pub fn read_data(
     device: &impl HidDevice,
     length: usize,
-    timeout: Option<Duration>,
+    timeout: bool
 ) -> Result<Vec<u8>, HidError> {
     let mut buf = vec![0u8; length];
 
     match timeout {
-        Some(timeout) => device.read_timeout(buf.as_mut_slice(), timeout.as_millis() as i32),
-        None => device.read(buf.as_mut_slice()),
+        true => device.read_timeout(buf.as_mut_slice(), 1),
+        false => device.read(buf.as_mut_slice()),
     }?;
 
     Ok(buf)

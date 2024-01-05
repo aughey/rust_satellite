@@ -13,5 +13,6 @@ pub use anyhow::Result;
 pub use async_trait::async_trait;
 /// export the companion interface
 pub mod companion;
+
 /// export the device interface
 pub mod device;

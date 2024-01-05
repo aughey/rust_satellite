@@ -49,3 +49,7 @@ To cross-compile the application, first install Cross using `cargo install cross
 ```
 PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig cross build --release --target arm-unknown-linux-gnueabihf
 ```
+
+```
+vscode ➜ /workspaces/rust_satellite/teensy_lib (main) $ cargo build --package teensy_lib --features arduino_allocator --target thumbv7em-none-eabihf 
+```

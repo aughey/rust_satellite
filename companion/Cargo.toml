@@ -3,25 +3,23 @@ name = "companion"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-async = ["tokio", "traits", "elgato-streamdeck", "lru"]
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-base64 = { version = "0.21.4", default-features = false, features = ["alloc"] }
+base64 = { version = "0.21.4" }
 common = { version = "0.1.0", path = "../common" }
-elgato-streamdeck = { version = "0.4.1", path = "../elgato-streamdeck", optional = true }
+elgato-streamdeck = { version = "0.4.1", path = "../elgato-streamdeck" }
 image = { version = "0.24.7", default-features = false, features = ["jpeg"] }
-lru = { version = "0.12.1", default-features = false, optional = true }
-nom = { version = "7.1.3", default-features = false, features = ["alloc"] }
-tracing = { version = "0.1.37", default-features = false }
-traits = { version = "0.1.0", path = "../traits", optional = true }
-tokio = { optional = true, version = "1.32.0", features = [
+lru = { version = "0.12.1" }
+nom = { version = "7.1.3" }
+tracing = { version = "0.1.37" }
+traits = { version = "0.1.0", path = "../traits" }
+tokio = { version = "1.32.0", features = [
     "io-util",
     "sync",
     "time",
     "net",
     "full",
 ] }
-anyhow = { version = "1.0.79", default-features = false }
+anyhow = { version = "1.0.79" }
+leaf_comm = { version = "0.1.0", path = "../leaf_comm" }

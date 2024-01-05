@@ -11,6 +11,8 @@ pub async fn receive_length_prefix(
     stream.read_exact(&mut length_buffer).await?;
     let length = u32::from_be_bytes(length_buffer);
 
+    println!("length: {}", length);
+
     // Read the actual message
     buf.resize(length as usize, Default::default());
     stream.read_exact(&mut buf).await?;
@@ -23,9 +25,10 @@ pub async fn receive_length_prefix(
 pub async fn write_struct(
     stream: &mut (impl AsyncWrite + Unpin),
     data: &impl serde::Serialize,
-) -> std::io::Result<()> {
-    let buf = bincode::serialize(data).unwrap();
-    write_length_prefix(stream, buf).await
+) -> anyhow::Result<()> {
+    //let buf = bincode::serialize(data).unwrap();
+    let buf = postcard::to_stdvec(data)?;
+    Ok(write_length_prefix(stream, buf).await?)
 }
 
 /// Write a message to the stream, prefixed with a u32 length.
@@ -52,6 +55,7 @@ where
     T: serde::de::DeserializeOwned,
 {
     let buf = receive_length_prefix(stream, Vec::new()).await?;
-    let data = bincode::deserialize(&buf)?;
+    //let data = bincode::deserialize(&buf)?;
+    let data = postcard::from_bytes(&buf)?;
     Ok(data)
 }

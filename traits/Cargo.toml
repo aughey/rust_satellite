@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.75"
-async-trait = "0.1.73"
-base64 = "0.21.4"
+anyhow = { version="1.0.75" }
+async-trait = {version = "0.1.73" }
 common = { version = "0.1.0", path = "../common" }
+leaf_comm = { version = "0.1.0", path = "../leaf_comm" }
 serde = { version = "1.0.188", features = ["derive"] }

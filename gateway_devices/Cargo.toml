@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 bin_comm = { version = "0.1.0", path = "../bin_comm" }
+leaf_comm = { version = "0.1.0", path = "../leaf_comm" }
 tokio = { version = "1.32.0", features = ["io-util"] }
 tracing = "0.1.37"
 traits = { version = "0.1.0", path = "../traits" }
