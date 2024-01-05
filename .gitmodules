@@ -7,3 +7,6 @@
 [submodule "elgato-streamdeck"]
 	path = elgato-streamdeck
 	url = https://github.com/aughey/elgato-streamdeck
+[submodule "bincode"]
+	path = bincode
+	url = https://github.com/losfair/bincode
